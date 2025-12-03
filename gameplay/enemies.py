@@ -1,10 +1,26 @@
 import math
 import random
-from core.events import Event, EVENT_GAME_OVER, EVENT_BOSS_NEAR, EVENT_ENEMY_SPAWNED
+from typing import Any
+from core.events import Event, EVENT_GAME_OVER, EVENT_BOSS_NEAR, EVENT_ENEMY_SPAWNED, EVENT_ENEMY_KILLED
 
-def update_enemies(engine, dt_ms):
+def update_enemies(engine: Any, dt_ms: int) -> None:
     tx, ty = (engine.towers[0]['pos'] if engine.towers else (engine.width - 40, engine.height//2))
-    for enemy in engine.enemies:
+    for enemy in list(engine.enemies): # Use list() to allow modification during iteration if needed
+        # Handle knockback if active
+        if enemy.get('knockback'):
+            k = enemy['knockback']
+            k['timer'] -= dt_ms
+            if k['timer'] <= 0:
+                del enemy['knockback']
+            else:
+                # Apply knockback velocity
+                enemy['pos'][0] += k['vel'][0] * (dt_ms / 1000.0)
+                enemy['pos'][1] += k['vel'][1] * (dt_ms / 1000.0)
+                # Skip normal movement during knockback
+                enemy['attacking'] = False
+                enemy['anim'] = 'walk' # or maybe a stunned anim
+                continue
+
         dx = tx - enemy['pos'][0]; dy = ty - enemy['pos'][1]
         dist = math.hypot(dx, dy)
         if dist > 0:
@@ -18,17 +34,37 @@ def update_enemies(engine, dt_ms):
             enemy['anim_timer'] = 0
             enemy['anim_index'] = (enemy.get('anim_index', 0) + 1) % frames_len
         if enemy['attacking']:
-            prev_hp = engine.tower_hp
-            engine.tower_hp = max(0.0, engine.tower_hp - enemy['damage'] * (dt_ms / 1000.0))
-            if engine.tower_hp < prev_hp:
-                engine.hit_overlay_ms = max(getattr(engine, 'hit_overlay_ms', 0), 180)
-            if engine.tower_hp <= 0 and engine.state != 'game_over':
-                engine.state = 'game_over'
-                engine.boss_alert_ms = 0
-                engine.boss_banner_ms = 0
-                engine.shake_strength = 0.0
-                engine.camera_offset = (0, 0)
-                engine.ev_manager.post(Event(EVENT_GAME_OVER))
+            # Apply Sword Damage (Thorns) as DPS while in contact
+            sword_dmg = getattr(engine, 'sword_damage', 0.0)
+            if sword_dmg > 0:
+                enemy['hp'] -= sword_dmg * (dt_ms / 1000.0)
+                if enemy['hp'] <= 0:
+                    if enemy in engine.enemies:
+                        engine.enemies.remove(enemy)
+                    coins = 10 if enemy.get('boss') else 5
+                    engine.ev_manager.post(Event(EVENT_ENEMY_KILLED, data={'score': 50, 'coins': coins, 'pos': tuple(enemy['pos'])}))
+                    continue
+
+            # Apply tower damage only on discrete hits (cooldown based)
+            enemy['attack_timer'] = enemy.get('attack_timer', 0) + dt_ms
+            cd = int(enemy.get('attack_cooldown_ms', 600))
+            if enemy['attack_timer'] >= cd:
+                enemy['attack_timer'] -= cd
+                prev_hp = engine.tower_hp
+                engine.tower_hp = max(0.0, engine.tower_hp - enemy['damage'])
+                if engine.tower_hp < prev_hp:
+                    engine.hit_overlay_ms = max(getattr(engine, 'hit_overlay_ms', 0), 180)
+                if engine.tower_hp <= 0 and engine.state != 'game_over':
+                    engine.state = 'game_over'
+                    engine.boss_alert_ms = 0
+                    engine.boss_banner_ms = 0
+                    engine.shake_strength = 0.0
+                    engine.camera_offset = (0, 0)
+                    # Start Tower Fall Animation
+                    engine.tower_fall_active = True
+                    engine.tower_fall_anim_index = 0
+                    engine.tower_fall_anim_timer = 0
+                    engine.ev_manager.post(Event(EVENT_GAME_OVER))
         if enemy.get('boss') and dist < 160:
             engine.ev_manager.post(Event(EVENT_BOSS_NEAR, data={'dist': dist}))
             engine.boss_alert_ms = 400
@@ -46,7 +82,7 @@ def update_enemies(engine, dt_ms):
                 enemy['anim_speed'] = max(70, enemy.get('anim_speed', 100) - 10)
                 enemy['phase'] = 2
 
-def enemy_speed_for_time(engine, t_ms):
+def enemy_speed_for_time(engine: Any, t_ms: int) -> float:
     table = getattr(engine, 'ENEMY_SPEED_TABLE', [
         (25000, 50.0),
         (50000, 60.0),
@@ -60,14 +96,14 @@ def enemy_speed_for_time(engine, t_ms):
             return speed
     return table[-1][1]
 
-def spawn_params_for_time(engine, t_ms):
+def spawn_params_for_time(engine: Any, t_ms: int):
     base = 1700.0
     dec = min(700.0, t_ms * 0.005)
     interval = int(max(900.0, base - dec))
     max_enemies = 6 + min(6, int(t_ms / 30000))
     return interval, max_enemies
 
-def spawn_enemy(engine, boss=False):
+def spawn_enemy(engine: Any, boss: bool = False) -> None:
     band_top = random.uniform(50, engine.height/2 - 90)
     band_bottom = random.uniform(engine.height/2 + 90, engine.height - 50)
     y = random.choice([band_top, band_bottom])
@@ -81,7 +117,17 @@ def spawn_enemy(engine, boss=False):
         hp += 20 + int(engine.elapsed_ms / 30000)
         damage = 12.0
         anim_speed = 120
-    enemy = {'pos': [-30.0, float(y)], 'speed': speed, 'hp': hp, 'hp_max': hp, 'damage': damage, 'anim': 'walk', 'attacking': False, 'anim_index': 0, 'anim_timer': 0, 'anim_speed': anim_speed, 'boss': boss}
+    from engine.factory import create_enemy
+    enemy = create_enemy((-30, int(y)), hp=hp, speed=speed, boss=boss)
+    enemy['hp_max'] = hp
+    enemy['damage'] = damage
+    enemy['anim'] = 'walk'
+    enemy['attacking'] = False
+    enemy['anim_index'] = 0
+    enemy['anim_timer'] = 0
+    enemy['anim_speed'] = anim_speed
+    enemy['attack_timer'] = 0
+    enemy['attack_cooldown_ms'] = 600
     engine.enemies.append(enemy)
     try:
         engine.ev_manager.post(Event(EVENT_ENEMY_SPAWNED, data={'boss': boss, 'pos': tuple(enemy['pos'])}))

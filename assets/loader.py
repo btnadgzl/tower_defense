@@ -1,8 +1,9 @@
 import os
 import sys
 import pygame
+from typing import Any
 
-def load_images(engine):
+def load_images(engine: Any) -> None:
     base_dir = getattr(sys, '_MEIPASS', os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
     map_path = os.path.join(base_dir, 'assets', 'map.png')
     if os.path.exists(map_path):
@@ -54,6 +55,12 @@ def load_images(engine):
         engine.settings_menu_img = pygame.image.load(settings_menu_path).convert()
     if os.path.exists(options_menu_path):
         engine.options_menu_img = pygame.image.load(options_menu_path).convert()
+    upgrade_level_path = os.path.join(base_dir, 'assets', 'upgrade_level.png')
+    if os.path.exists(upgrade_level_path):
+        engine.upgrade_level_img = pygame.image.load(upgrade_level_path).convert_alpha()
+    upgrade_bg_path = os.path.join(base_dir, 'assets', 'upgrade_menu.png')
+    if os.path.exists(upgrade_bg_path):
+        engine.upgrademenu_img = pygame.image.load(upgrade_bg_path).convert_alpha()
     if os.path.exists(volume_up_path):
         engine.volume_up_img = pygame.image.load(volume_up_path).convert_alpha()
     if os.path.exists(volume_down_path):
@@ -66,8 +73,11 @@ def load_images(engine):
             engine.game_over_img = pygame.image.load(game_over_alt).convert_alpha()
     if os.path.exists(previous_path):
         engine.previous_img = pygame.image.load(previous_path).convert_alpha()
+    pause_menu_path = os.path.join(base_dir, 'assets', 'pause_menu.png')
+    if os.path.exists(pause_menu_path):
+        engine.pause_menu_img = pygame.image.load(pause_menu_path).convert_alpha()
 
-def load_enemy_frames(engine):
+def load_enemy_frames(engine: Any) -> None:
     engine.enemy_walk_frames = []
     engine.enemy_attack_frames = []
     engine.boss_frames = []
@@ -84,3 +94,16 @@ def load_enemy_frames(engine):
         bp = os.path.join(base_dir, 'assets', f'boss_{i}.png')
         if os.path.exists(bp):
             engine.boss_frames.append(pygame.image.load(bp).convert_alpha())
+            
+    engine.tower_fallen_frames = []
+    for i in range(0, 9): # 0 to 8
+        tf = os.path.join(base_dir, 'assets', f'tower_fallen{i}.png')
+        if os.path.exists(tf):
+            engine.tower_fallen_frames.append(pygame.image.load(tf).convert_alpha())
+            
+    engine.tower_damaged_imgs = []
+    # We expect tower_damaged1.png to tower_damaged5.png
+    for i in range(1, 6):
+        td = os.path.join(base_dir, 'assets', f'tower_damaged{i}.png')
+        if os.path.exists(td):
+            engine.tower_damaged_imgs.append(pygame.image.load(td).convert_alpha())

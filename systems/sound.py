@@ -9,6 +9,7 @@ class SoundSystem:
         self.ev_manager.register(self)
         self.volume = 1.0
         self.enabled = True
+        self.debug_sound_logs = False
         try:
             pygame.mixer.init()
         except Exception:
@@ -35,6 +36,10 @@ class SoundSystem:
             os.path.join(base_dir, 'assets', 'hover_click.wav'),
         ])
         bg_path = os.path.join(base_dir, 'assets', 'background_effect.wav')
+        war_path = os.path.join(base_dir, 'assets', 'war_effect.wav')
+        self._bg_music_path = bg_path if os.path.exists(bg_path) else None
+        self._war_music_path = war_path if os.path.exists(war_path) else None
+        self._current_music_kind = None
         rain_path = os.path.join(base_dir, 'assets', 'rain.wav')
         upgrade_path = os.path.join(base_dir, 'assets', 'upgrade.wav')
         bullet_path = os.path.join(base_dir, 'assets', 'bullet.wav')
@@ -79,6 +84,7 @@ class SoundSystem:
                     self.enemy_snd.set_volume(self.volume * 0.22)
                 
                 pygame.mixer.music.play(-1)
+                self._current_music_kind = 'bg'
             except Exception:
                 pass
 
@@ -90,16 +96,19 @@ class SoundSystem:
                 pos = event.data.get('pos')
                 pitch = float(event.data.get('pitch', 1.0))
             if pos:
-                print(f"[Sound v={self.volume:.1f} p={pitch:.2f}] 'Pew Pew!' Target: {pos}")
+                if self.debug_sound_logs:
+                    print(f"[Sound v={self.volume:.1f} p={pitch:.2f}] 'Pew Pew!' Target: {pos}")
             else:
-                print(f"[Sound v={self.volume:.1f} p={pitch:.2f}] 'Pew Pew!'")
+                if self.debug_sound_logs:
+                    print(f"[Sound v={self.volume:.1f} p={pitch:.2f}] 'Pew Pew!'")
             try:
                 if self.bullet_snd and self.enabled:
                     self.bullet_snd.play()
             except Exception:
                 pass
         elif event.name == EVENT_ENEMY_KILLED:
-            print(f"[Sound v={self.volume:.1f}] Explosion")
+            if self.debug_sound_logs:
+                print(f"[Sound v={self.volume:.1f}] Explosion")
         elif event.name == EVENT_ENEMY_SPAWNED:
             try:
                 if self.enemy_snd and self.enabled:
@@ -107,7 +116,8 @@ class SoundSystem:
             except Exception:
                 pass
         elif event.name == EVENT_TOWER_PLACED:
-            print(f"[Sound v={self.volume:.1f}] Tower placed: {event.data['pos']}")
+            if self.debug_sound_logs:
+                print(f"[Sound v={self.volume:.1f}] Tower placed: {event.data['pos']}")
         elif event.name == EVENT_SOUND_VOLUME_CHANGED:
             v = max(0.0, min(1.0, float(event.data.get('volume', 1.0))))
             self.volume = v
@@ -139,6 +149,17 @@ class SoundSystem:
             st = event.data.get('state') if event.data else None
             self._last_state = st
             try:
+                kind = 'bg' if st in ('menu','settings') else ('war' if st in ('playing','paused') else None)
+                if kind and self.enabled:
+                    path = self._bg_music_path if kind=='bg' else self._war_music_path
+                    if path and self._current_music_kind != kind:
+                        pygame.mixer.music.load(path)
+                        pygame.mixer.music.set_volume(self.volume * 0.5)
+                        pygame.mixer.music.play(-1)
+                        self._current_music_kind = kind
+                else:
+                    pygame.mixer.music.stop()
+                    self._current_music_kind = None
                 if self.rain_sound:
                     if self.enabled and st in ('playing', 'paused'):
                         if not getattr(self, 'rain_playing', False):
@@ -153,7 +174,8 @@ class SoundSystem:
         elif event.name == EVENT_BOSS_NEAR:
             d = event.data.get('dist', None)
             if d is not None:
-                print(f"[Ambience] Boss approaching (d={int(d)})")
+                if self.debug_sound_logs:
+                    print(f"[Ambience] Boss approaching (d={int(d)})")
         elif event.name == EVENT_UI_HOVER:
             pass
         elif event.name == EVENT_MOUSE_CLICK:

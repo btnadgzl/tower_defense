@@ -1,34 +1,56 @@
 import pygame
-import math
-from core.events import Event, EVENT_QUIT, EVENT_UI_CLICK
+from typing import Any, Tuple
+from core.events import Event, EVENT_UI_CLICK, EVENT_QUIT
 
 def _ease_out_cubic(p):
     q = 1.0 - p
     return 1.0 - q*q*q
 
-def draw_paused_background_to(engine, surface):
-    overlay = pygame.Surface((engine.width, engine.height), pygame.SRCALPHA)
-    overlay.fill((0, 0, 0, 160))
-    surface.blit(overlay, (0, 0))
+def draw_paused_background_to(engine: Any, surface: pygame.Surface) -> None:
+    img = getattr(engine, 'pause_menu_img', None)
+    if img:
+        bg = pygame.transform.smoothscale(img, (engine.width, engine.height))
+        surface.blit(bg, (0, 0))
+    else:
+        overlay = pygame.Surface((engine.width, engine.height), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 160))
+        surface.blit(overlay, (0, 0))
 
-def draw_paused_controls_to(engine, surface):
-    engine.continue_btn_rect = pygame.Rect(engine.width//2 - 90, engine.height//2 - 80, 180, 36)
-    engine.settings_paused_rect = pygame.Rect(engine.width//2 - 90, engine.height//2 - 20, 180, 36)
-    engine.exit_btn_rect = pygame.Rect(engine.width//2 - 90, engine.height//2 + 40, 180, 36)
-    engine.quit_btn_rect = pygame.Rect(engine.width//2 - 90, engine.height//2 + 100, 180, 36)
-    buttons = [
-        (engine.continue_btn_rect, (80, 180, 80), (40, 100, 40), "Continue"),
-        (engine.settings_paused_rect, (120, 140, 220), (70, 90, 160), "Settings"),
-        (engine.exit_btn_rect, (220, 180, 80), (140, 120, 40), "Exit to Menu"),
-        (engine.quit_btn_rect, (180, 80, 80), (100, 40, 40), "Quit"),
-    ]
-    for rect, fill, border, label in buttons:
-        pygame.draw.rect(surface, fill, rect)
-        pygame.draw.rect(surface, border, rect, 2)
-        txt = engine.font.render(label, True, (20, 20, 20))
-        surface.blit(txt, txt.get_rect(center=rect.center))
+def draw_paused_controls_to(engine: Any, surface: pygame.Surface) -> None:
+    s = getattr(engine, 'ui_scale', 1.0)
+    engine.continue_btn_rect = pygame.Rect(0, 0, int(180 * s), int(36 * s))
+    engine.settings_paused_rect = pygame.Rect(0, 0, int(180 * s), int(36 * s))
+    engine.exit_btn_rect = pygame.Rect(0, 0, int(180 * s), int(36 * s))
+    engine.quit_btn_rect = pygame.Rect(0, 0, int(180 * s), int(36 * s))
+    pos = getattr(engine, 'paused_btn_pos', {'continue': (0.50, 0.45), 'settings': (0.50, 0.52), 'exit': (0.50, 0.60), 'quit': (0.50, 0.68)})
+    engine.continue_btn_rect.center = (int(engine.width * pos['continue'][0]), int(engine.height * pos['continue'][1]))
+    engine.settings_paused_rect.center = (int(engine.width * pos['settings'][0]), int(engine.height * pos['settings'][1]))
+    engine.exit_btn_rect.center = (int(engine.width * pos['exit'][0]), int(engine.height * pos['exit'][1]))
+    engine.quit_btn_rect.center = (int(engine.width * pos['quit'][0]), int(engine.height * pos['quit'][1]))
+    if getattr(engine, 'paused_btn_scale', None):
+        cw, ch = engine.paused_btn_scale.get('continue', (1.0, 1.0))
+        sw, sh = engine.paused_btn_scale.get('settings', (1.0, 1.0))
+        ew, eh = engine.paused_btn_scale.get('exit', (1.0, 1.0))
+        qw, qh = engine.paused_btn_scale.get('quit', (1.0, 1.0))
+        c1 = engine.continue_btn_rect.center
+        engine.continue_btn_rect.size = (max(8, int(engine.continue_btn_rect.width * cw)), max(8, int(engine.continue_btn_rect.height * ch)))
+        engine.continue_btn_rect.center = c1
+        c2 = engine.settings_paused_rect.center
+        engine.settings_paused_rect.size = (max(8, int(engine.settings_paused_rect.width * sw)), max(8, int(engine.settings_paused_rect.height * sh)))
+        engine.settings_paused_rect.center = c2
+        c3 = engine.exit_btn_rect.center
+        engine.exit_btn_rect.size = (max(8, int(engine.exit_btn_rect.width * ew)), max(8, int(engine.exit_btn_rect.height * eh)))
+        engine.exit_btn_rect.center = c3
+        c4 = engine.quit_btn_rect.center
+        engine.quit_btn_rect.size = (max(8, int(engine.quit_btn_rect.width * qw)), max(8, int(engine.quit_btn_rect.height * qh)))
+        engine.quit_btn_rect.center = c4
+    if getattr(engine, 'paused_debug', False):
+        pygame.draw.rect(surface, (0,200,255), engine.continue_btn_rect, 2)
+        pygame.draw.rect(surface, (0,200,255), engine.settings_paused_rect, 2)
+        pygame.draw.rect(surface, (0,200,255), engine.exit_btn_rect, 2)
+        pygame.draw.rect(surface, (0,200,255), engine.quit_btn_rect, 2)
 
-def draw_overlays(engine):
+def draw_overlays(engine: Any) -> None:
     if engine.state == 'paused':
         draw_paused_background_to(engine, engine.screen)
         draw_paused_controls_to(engine, engine.screen)
@@ -70,6 +92,9 @@ def draw_overlays(engine):
             pygame.draw.rect(engine.screen, (140, 120, 40), engine.go_exit_btn_rect, 2)
             e_txt = engine.font.render("Exit to Menu", True, (20, 20, 20))
             engine.screen.blit(e_txt, e_txt.get_rect(center=engine.go_exit_btn_rect.center))
+        if getattr(engine, 'go_debug', False):
+            pygame.draw.rect(engine.screen, (0,200,255), engine.restart_btn_rect, 2)
+            pygame.draw.rect(engine.screen, (0,200,255), engine.go_exit_btn_rect, 2)
     from engine.render import draw_vignette as _v
     _v(engine)
     from engine.render import draw_letterbox_boss as _lb
@@ -97,7 +122,7 @@ def draw_overlays(engine):
             btxt = engine.font.render("BOSS", True, (240, 240, 240))
             engine.screen.blit(btxt, (bar.x + bar.width + 8, bar.y - 4))
 
-def handle_paused_click(engine, pos):
+def handle_paused_click(engine: Any, pos: Tuple[int, int]) -> None:
     if getattr(engine, 'continue_btn_rect', None) and engine.continue_btn_rect.collidepoint(pos):
         engine.ev_manager.post(Event(EVENT_UI_CLICK, data={'id': 'paused:continue'}))
         engine.start_transition('playing', style='zoom')
@@ -107,19 +132,21 @@ def handle_paused_click(engine, pos):
         engine.start_transition('settings', style='slide', dir=1)
     elif getattr(engine, 'exit_btn_rect', None) and engine.exit_btn_rect.collidepoint(pos):
         engine.ev_manager.post(Event(EVENT_UI_CLICK, data={'id': 'paused:exit_menu'}))
+        engine.reset_game()
         engine.start_transition('menu', style='slide', dir=-1)
     elif getattr(engine, 'quit_btn_rect', None) and engine.quit_btn_rect.collidepoint(pos):
         engine.ev_manager.post(Event(EVENT_UI_CLICK, data={'id': 'paused:quit'}))
         engine.ev_manager.post(Event(EVENT_QUIT))
 
-def handle_game_over_click(engine, pos):
+def handle_game_over_click(engine: Any, pos: Tuple[int, int]) -> None:
     if getattr(engine, 'restart_btn_rect', None) and engine.restart_btn_rect.collidepoint(pos):
         engine.ev_manager.post(Event(EVENT_UI_CLICK, data={'id': 'game_over:restart'}))
         engine.reset_game(); engine.start_transition('playing')
     elif getattr(engine, 'go_exit_btn_rect', None) and engine.go_exit_btn_rect.collidepoint(pos):
         engine.ev_manager.post(Event(EVENT_UI_CLICK, data={'id': 'game_over:exit_menu'}))
+        engine.reset_game()
         engine.start_transition('menu')
-def draw_intro(engine):
+def draw_intro(engine: Any) -> None:
     if not getattr(engine, 'intro_anim_active', False):
         return
     if not getattr(engine, 'intro_anim_started', False):

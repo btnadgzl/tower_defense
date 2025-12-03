@@ -1,8 +1,9 @@
 import pygame
 import math
 import random
+from typing import Any
 
-def draw_background(engine):
+def draw_background(engine: Any) -> None:
     if engine.map_img:
         engine.screen.blit(engine.map_img, engine.camera_offset)
         t = getattr(engine, 'elapsed_ms', 0)
@@ -24,23 +25,70 @@ def draw_background(engine):
         for y in range(0, engine.height, engine.cell):
             pygame.draw.line(engine.screen, (45, 45, 45), (0, y), (engine.width, y))
 
-def draw_towers(engine):
+def draw_towers(engine: Any) -> None:
     ox, oy = engine.camera_offset
     for i, tower in enumerate(engine.towers):
         cx, cy = tower['pos'][0] + ox, tower['pos'][1] + oy
+        
+        # Check for Tower Fall Animation
+        if getattr(engine, 'tower_fall_active', False) and i == 0:
+             # Update Animation Timer
+             dt = getattr(engine, 'last_dt_ms', 16)
+             engine.tower_fall_anim_timer += dt
+             
+             frames = getattr(engine, 'tower_fallen_frames', [])
+             if frames:
+                 # 120ms per frame
+                 idx = int(engine.tower_fall_anim_timer / 120)
+                 idx = min(idx, len(frames) - 1)
+                 
+                 frame = frames[idx]
+                 rect = frame.get_rect(center=(cx, cy))
+                 engine.screen.blit(frame, rect)
+                 continue # Skip drawing normal tower
+
         sh = pygame.Surface((60, 28), pygame.SRCALPHA)
         pygame.draw.ellipse(sh, (0, 0, 0, 70), (0, 0, 60, 28))
         engine.screen.blit(sh, (int(cx - 30), int(cy + 16)))
-        if engine.tower_img:
-            rect = engine.tower_img.get_rect(center=(cx, cy))
-            engine.screen.blit(engine.tower_img, rect)
+        
+        # Determine which tower image to use (normal or damaged)
+        current_tower_img = engine.tower_img
+        
+        # Calculate damage level (1-5) if damaged
+        if engine.tower_hp_max > 0 and engine.tower_hp < engine.tower_hp_max:
+            dmg_imgs = getattr(engine, 'tower_damaged_imgs', [])
+            if dmg_imgs:
+                # Inverse percentage: 1.0 is full health, 0.0 is dead
+                pct = max(0.0, engine.tower_hp / float(engine.tower_hp_max))
+                # We have 5 stages. 
+                # Stage 1: < 100%
+                # Stage 2: < 80%
+                # Stage 3: < 60%
+                # Stage 4: < 40%
+                # Stage 5: < 20%
+                # Let's map (1.0 - pct) to index 0..4
+                damage_stage = int((1.0 - pct) * 5)
+                # Clamp to 0..4 (indices for damaged1..damaged5)
+                # Note: damage_stage 0 means slight damage (tower_damaged1)
+                damage_stage = max(0, min(len(dmg_imgs) - 1, damage_stage))
+                
+                # Only use damaged image if actually damaged significantly or just starting
+                if pct < 0.99:
+                    current_tower_img = dmg_imgs[damage_stage]
+                    # Resize if needed (lazy resize, better to do in loader but this is safe)
+                    if current_tower_img.get_size() != (engine.tower_img.get_width(), engine.tower_img.get_height()):
+                         current_tower_img = pygame.transform.smoothscale(current_tower_img, (engine.tower_img.get_width(), engine.tower_img.get_height()))
+
+        if current_tower_img:
+            rect = current_tower_img.get_rect(center=(cx, cy))
+            engine.screen.blit(current_tower_img, rect)
         else:
             pygame.draw.circle(engine.screen, (80, 200, 120), (int(cx), int(cy)), 12)
         if engine.selected_tower_idx == i:
             rng = int(tower.get('range', 120))
             pygame.draw.circle(engine.screen, (60, 60, 60), (int(cx), int(cy)), rng, 1)
 
-def draw_enemies(engine):
+def draw_enemies(engine: Any) -> None:
     ox, oy = engine.camera_offset
     for enemy in engine.enemies:
         cx, cy = int(enemy['pos'][0] + ox), int(enemy['pos'][1] + oy)
@@ -77,7 +125,7 @@ def draw_enemies(engine):
         color = (30, 200, 80) if not enemy.get('boss') else (220, 60, 60)
         pygame.draw.rect(engine.screen, color, barfg)
 
-def draw_bullets(engine):
+def draw_bullets(engine: Any) -> None:
     ox, oy = engine.camera_offset
     for bullet in engine.bullets:
         cx, cy = int(bullet['pos'][0] + ox), int(bullet['pos'][1] + oy)
@@ -101,7 +149,7 @@ def _build_vignette(engine):
         pygame.draw.circle(surf, col, (cx, cy), r)
     engine.vignette_surf = surf
 
-def draw_vignette(engine):
+def draw_vignette(engine: Any) -> None:
     if engine.state != 'playing':
         return
     if not hasattr(engine, 'vignette_surf') or engine.vignette_surf is None or engine.vignette_surf.get_size() != (engine.width, engine.height):
@@ -115,10 +163,10 @@ def draw_vignette(engine):
     s.set_alpha(alpha)
     engine.screen.blit(s, (0, 0))
 
-def _ease_in_out(p):
+def _ease_in_out(p: float) -> float:
     return p*p*(3 - 2*p)
 
-def draw_letterbox_boss(engine):
+def draw_letterbox_boss(engine: Any) -> None:
     if engine.state != 'playing' or engine.boss_banner_ms <= 0:
         return
     dur = 3500.0
@@ -169,6 +217,8 @@ def draw_particles(engine):
             col = (int(160 * life), int(255 * life), int(160 * life))
         elif kind == 'ui_coin':
             col = (int(255 * life), int(215 * life), int(0 * life))
+        elif kind == 'wind':
+            col = (int(200 * life), int(255 * life), int(255 * life))
         else:
             col = (int(240 * life), int(200 * life), int(80 * life))
         rad = int(p.get('radius', 3) * (0.7 + 0.3 * life))
@@ -179,8 +229,57 @@ def draw_particles(engine):
             pygame.draw.circle(s, (col[0], col[1], col[2], int(150 * life)), center, int(rad*1.8))
             pygame.draw.circle(s, (col[0], col[1], col[2], int(220 * life)), center, int(rad*1.0))
             engine.screen.blit(s, (px - rad*2, py - rad*2))
+        elif kind == 'wind':
+            # Draw a line or elongated ellipse for wind
+            vx, vy = p.get('vel', [0,0])
+            speed = math.hypot(vx, vy)
+            if speed > 0:
+                ex = px - (vx/speed) * rad * 4
+                ey = py - (vy/speed) * rad * 4
+                pygame.draw.line(engine.screen, col, (px, py), (ex, ey), max(1, int(rad/2)))
         else:
             pygame.draw.circle(engine.screen, col, (px, py), max(1, rad))
+            
+    # Draw Coin Effects (Floating Text + Icon)
+    for fx in getattr(engine, 'coin_effects', []):
+        fx_pos = fx.get('pos', [0,0])
+        px, py = int(fx_pos[0] + ox), int(fx_pos[1] + oy)
+        
+        # Opacity based on TTL
+        ttl_ref = getattr(engine, 'COIN_EFFECT_TTL_MS', 800)
+        ttl = fx.get('ttl', 0)
+        alpha = max(0, min(255, int(255 * (ttl / ttl_ref))))
+        
+        # Amount text
+        amount = fx.get('amount', 5)
+        txt_str = f"+{amount}"
+        
+        # Font & Color
+        font = engine.font  # Use slightly larger font
+        color = (255, 215, 0) # Gold
+        
+        # Render Text
+        txt_surf = font.render(txt_str, True, color)
+        txt_surf.set_alpha(alpha)
+        
+        # Icon
+        icon = getattr(engine, 'coin_img', None)
+        if icon:
+             # Scale icon if needed (Larger size)
+             iw, ih = 24, 24
+             scaled_icon = pygame.transform.smoothscale(icon, (iw, ih))
+             scaled_icon.set_alpha(alpha)
+             
+             # Position: Icon left, Text right
+             total_w = iw + 6 + txt_surf.get_width()
+             start_x = px - total_w // 2
+             
+             engine.screen.blit(scaled_icon, (start_x, py - ih//2))
+             engine.screen.blit(txt_surf, (start_x + iw + 6, py - txt_surf.get_height()//2))
+        else:
+             # Just text centered
+             rect = txt_surf.get_rect(center=(px, py))
+             engine.screen.blit(txt_surf, rect)
 
 def update_particles(engine, dt_ms):
     for p in list(engine.particles):
@@ -321,6 +420,13 @@ def apply_display_mode(engine):
         if engine._boss_frames_base:
             ew, eh = int(engine.BASE_ENEMY_SIZE[0] * engine.ui_scale), int(engine.BASE_ENEMY_SIZE[1] * engine.ui_scale)
             engine.boss_frames = [pygame.transform.smoothscale(fr, (max(12, ew), max(12, eh))) for fr in engine._boss_frames_base]
+    if getattr(engine, 'tower_fallen_frames', None):
+        if not hasattr(engine, '_tower_fallen_frames_base'):
+            engine._tower_fallen_frames_base = list(engine.tower_fallen_frames)
+        if engine._tower_fallen_frames_base:
+            tw, th = int(engine.BASE_TOWER_SIZE[0] * engine.ui_scale), int(engine.BASE_TOWER_SIZE[1] * engine.ui_scale)
+            engine.tower_fallen_frames = [pygame.transform.smoothscale(fr, (max(16, tw), max(16, th))) for fr in engine._tower_fallen_frames_base]
+
     if getattr(engine, 'healthbar_img', None):
         target = (int(engine.BASE_HUD_SIZE[0] * engine.ui_scale), int(engine.BASE_HUD_SIZE[1] * engine.ui_scale))
         if target[0] > 0 and target[1] > 0:
@@ -385,7 +491,7 @@ def update_rain(engine, dt_ms):
 def draw_rain(engine):
     if not getattr(engine, 'rain_enabled', False):
         return
-    if engine.state != 'playing':
+    if engine.state not in ('playing', 'paused'):
         return
     if not hasattr(engine, 'rain_surf') or engine.rain_surf is None or engine.rain_surf.get_size() != (engine.width, engine.height):
         engine.rain_surf = pygame.Surface((engine.width, engine.height), pygame.SRCALPHA)

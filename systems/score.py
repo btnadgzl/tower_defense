@@ -6,6 +6,7 @@ class ScoreSystem:
         self.ev_manager.register(self)
         self.score = 0
         self.coins = 0
+        self.debug_score_logs = False
 
     def notify(self, event):
         if event.name == EVENT_ENEMY_KILLED:
@@ -13,15 +14,18 @@ class ScoreSystem:
             self.score += points
             coins = event.data.get('coins', 1)
             self.coins += coins
-            print(f"[Score] +{points} points, +{coins} coin. Score: {self.score}, Coins: {self.coins}")
+            if self.debug_score_logs:
+                print(f"[Score] +{points} points, +{coins} coin. Score: {self.score}, Coins: {self.coins}")
             self.ev_manager.post(Event(EVENT_COINS_UPDATED, data={'coins': self.coins}))
         elif event.name == EVENT_UPGRADE_TOWER:
             cost = event.data.get('cost', 5)
             up_type = event.data.get('type', 'range')
             if self.coins >= cost:
                 self.coins -= cost
-                print(f"[Score] Upgrade '{up_type}' purchased. Coins left: {self.coins}")
+                if self.debug_score_logs:
+                    print(f"[Score] Upgrade '{up_type}' purchased. Coins left: {self.coins}")
                 self.ev_manager.post(Event(EVENT_COINS_UPDATED, data={'coins': self.coins}))
                 self.ev_manager.post(Event(EVENT_TOWER_UPGRADED, data={'type': up_type, 'cost': cost}))
             else:
-                print(f"[Score] Not enough coins: {self.coins}/{cost}")
+                if self.debug_score_logs:
+                    print(f"[Score] Not enough coins: {self.coins}/{cost}")
