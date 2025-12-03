@@ -1,13 +1,14 @@
 import os
 import sys
 import pygame
-from core.events import EVENT_TOWER_FIRE, EVENT_ENEMY_KILLED, EVENT_TOWER_PLACED, EVENT_SOUND_VOLUME_CHANGED, EVENT_BOSS_NEAR, EVENT_UI_HOVER, EVENT_SOUND_TOGGLE, EVENT_MOUSE_CLICK, EVENT_STATE_CHANGED, EVENT_TOWER_UPGRADED, EVENT_UI_CLICK, EVENT_ENEMY_SPAWNED
+from core.events import EVENT_TOWER_FIRE, EVENT_ENEMY_KILLED, EVENT_TOWER_PLACED, EVENT_SOUND_VOLUME_CHANGED, EVENT_MUSIC_VOLUME_CHANGED, EVENT_BOSS_NEAR, EVENT_SOUND_TOGGLE, EVENT_STATE_CHANGED, EVENT_TOWER_UPGRADED, EVENT_UI_CLICK, EVENT_ENEMY_SPAWNED, EVENT_GAME_OVER
 
 class SoundSystem:
     def __init__(self, ev_manager):
         self.ev_manager = ev_manager
         self.ev_manager.register(self)
         self.volume = 1.0
+        self.music_volume = 0.5
         self.enabled = True
         self.debug_sound_logs = False
         try:
@@ -21,6 +22,8 @@ class SoundSystem:
         self.upgrade_snd = None
         self.rain_playing = False
         self._last_state = None
+        self.game_over_snd = None
+        self._game_over_music_path = None
         base_dir = getattr(sys, '_MEIPASS', os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
         def _pick_existing(paths):
             for p in paths:
@@ -37,8 +40,18 @@ class SoundSystem:
         ])
         bg_path = os.path.join(base_dir, 'assets', 'background_effect.wav')
         war_path = os.path.join(base_dir, 'assets', 'war_effect.wav')
+        go_wav_path = os.path.join(base_dir, 'assets', 'game_over.wav')
+        go_mp3_path = os.path.join(base_dir, 'assets', 'game_over.mp3')
         self._bg_music_path = bg_path if os.path.exists(bg_path) else None
         self._war_music_path = war_path if os.path.exists(war_path) else None
+        if os.path.exists(go_wav_path):
+            try:
+                self.game_over_snd = pygame.mixer.Sound(go_wav_path)
+                self.game_over_snd.set_volume(self.music_volume)
+            except Exception:
+                self.game_over_snd = None
+        elif os.path.exists(go_mp3_path):
+            self._game_over_music_path = go_mp3_path
         self._current_music_kind = None
         rain_path = os.path.join(base_dir, 'assets', 'rain.wav')
         upgrade_path = os.path.join(base_dir, 'assets', 'upgrade.wav')
@@ -126,15 +139,22 @@ class SoundSystem:
                     self.tick.set_volume(self.volume * 0.6)
                 if self.rain_sound:
                     self.rain_sound.set_volume(self.volume * 0.18)
-                pygame.mixer.music.set_volume(self.volume * 0.5)
+                pygame.mixer.music.set_volume(self.music_volume)
+            except Exception:
+                pass
+        elif event.name == EVENT_MUSIC_VOLUME_CHANGED:
+            v = max(0.0, min(1.0, float(event.data.get('volume', 0.5))))
+            self.music_volume = v
+            try:
+                pygame.mixer.music.set_volume(self.music_volume)
             except Exception:
                 pass
         elif event.name == EVENT_SOUND_TOGGLE:
             self.enabled = bool(event.data.get('enabled', True))
             try:
                 if self.enabled:
-                    pygame.mixer.music.set_volume(self.volume * 0.5)
-                    if self.rain_sound and getattr(self, '_last_state', None) in ('playing', 'paused'):
+                    pygame.mixer.music.set_volume(self.music_volume)
+                    if self.rain_sound and getattr(self, '_last_state', None) in ('playing','paused'):
                         if not getattr(self, 'rain_playing', False):
                             self.rain_sound.play(loops=-1)
                             self.rain_playing = True
@@ -154,7 +174,7 @@ class SoundSystem:
                     path = self._bg_music_path if kind=='bg' else self._war_music_path
                     if path and self._current_music_kind != kind:
                         pygame.mixer.music.load(path)
-                        pygame.mixer.music.set_volume(self.volume * 0.5)
+                        pygame.mixer.music.set_volume(self.music_volume)
                         pygame.mixer.music.play(-1)
                         self._current_music_kind = kind
                 else:
@@ -171,18 +191,27 @@ class SoundSystem:
                             self.rain_playing = False
             except Exception:
                 pass
+        elif event.name == EVENT_GAME_OVER:
+            try:
+                pygame.mixer.music.stop()
+                if self.enabled:
+                    if self.game_over_snd:
+                        self.game_over_snd.set_volume(self.music_volume)
+                        self.game_over_snd.play()
+                        self._current_music_kind = 'go'
+                    elif self._game_over_music_path:
+                        pygame.mixer.music.load(self._game_over_music_path)
+                        pygame.mixer.music.set_volume(self.music_volume)
+                        pygame.mixer.music.play(0)
+                        self._current_music_kind = 'go'
+            except Exception:
+                pass
         elif event.name == EVENT_BOSS_NEAR:
             d = event.data.get('dist', None)
             if d is not None:
                 if self.debug_sound_logs:
                     print(f"[Ambience] Boss approaching (d={int(d)})")
-        elif event.name == EVENT_UI_HOVER:
-            pass
-        elif event.name == EVENT_MOUSE_CLICK:
-            try:
-                pass
-            except Exception:
-                pass
+        
         elif event.name == EVENT_UI_CLICK:
             try:
                 if self.tick and self.enabled:

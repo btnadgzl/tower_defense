@@ -28,7 +28,7 @@ def apply_upgrade(engine: Any, up_type: str) -> None:
     t = engine.towers[idx]
     
     if up_type == 'range':
-        t['range'] += engine.RANGE_UP_AMOUNT if hasattr(engine, 'RANGE_UP_AMOUNT') else 20
+        t['range'] = int(t['range'] * 2.0)
     elif up_type == 'firerate':
         delta = engine.FIRERATE_DELTA if hasattr(engine, 'FIRERATE_DELTA') else 50
         t['fire_rate'] = max(100, t['fire_rate'] - delta)

@@ -99,6 +99,8 @@ def draw_overlays(engine: Any) -> None:
     _v(engine)
     from engine.render import draw_letterbox_boss as _lb
     _lb(engine)
+    from engine.render import draw_wave_banner as _wb
+    _wb(engine)
     if engine.state == 'playing' and engine.boss_alert_ms > 0:
         alpha = int(90 * (engine.boss_alert_ms / 400.0))
         overlay = pygame.Surface((engine.width, engine.height), pygame.SRCALPHA)

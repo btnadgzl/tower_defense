@@ -135,12 +135,36 @@ def spawn_enemy(engine: Any, boss: bool = False) -> None:
         pass
 
 def update_spawn(engine, dt_ms):
-    engine.spawn_ms += dt_ms
-    engine.spawn_interval, max_enemies = spawn_params_for_time(engine, engine.elapsed_ms)
-    if engine.spawn_ms >= engine.spawn_interval and len(engine.enemies) < max_enemies:
-        engine.spawn_ms = 0
-        spawn_enemy(engine)
-    if engine.elapsed_ms >= engine.next_boss_ms and len(engine.enemies) < max_enemies:
+    # Wave-based spawning: 30s waves, fixed enemy count per wave.
+    # Boss spawns at the end of the wave; during boss phase no normal spawns.
+    if not hasattr(engine, 'wave_duration_ms'):
+        return
+    engine.wave_elapsed_ms += dt_ms
+
+    # Normal enemy spawn only before wave end and while under target
+    if not getattr(engine, 'wave_in_boss_phase', False):
+        if engine.wave_elapsed_ms < engine.wave_duration_ms and engine.wave_enemies_spawned < engine.wave_enemies_target:
+            interval = int(engine.wave_duration_ms / max(1, int(engine.wave_enemies_target)))
+            engine.spawn_ms = getattr(engine, 'spawn_ms', 0) + dt_ms
+            if engine.spawn_ms >= interval:
+                engine.spawn_ms = 0
+                spawn_enemy(engine, boss=False)
+                engine.wave_enemies_spawned += 1
+
+    # At wave end, spawn boss once and enter boss phase
+    if engine.wave_elapsed_ms >= engine.wave_duration_ms and not getattr(engine, 'wave_in_boss_phase', False):
         spawn_enemy(engine, boss=True)
         engine.boss_banner_ms = 2500
-        engine.next_boss_ms += engine.boss_interval_ms
+        engine.wave_in_boss_phase = True
+
+    # If in boss phase, wait until boss is killed to advance to next wave
+    if getattr(engine, 'wave_in_boss_phase', False):
+        boss_alive = any(e.get('boss') for e in engine.enemies)
+        if not boss_alive:
+            engine.wave_index += 1
+            engine.wave_enemies_target = engine.wave_enemy_base + (engine.wave_index - 1) * engine.wave_enemy_increment
+            engine.wave_enemies_spawned = 0
+            engine.wave_elapsed_ms = 0
+            engine.wave_in_boss_phase = False
+            engine.spawn_ms = 0
+            engine.wave_banner_ms = 2500

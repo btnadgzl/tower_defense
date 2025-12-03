@@ -2,7 +2,7 @@ import pygame
 import sys
 import math
 import os
-from core.events import Event, EventManager, EVENT_ENEMY_KILLED, EVENT_TOWER_FIRE, EVENT_TOWER_PLACED, EVENT_PATH_SET, EVENT_UPGRADE_TOWER, EVENT_TOWER_UPGRADED, EVENT_COINS_UPDATED, EVENT_TOGGLE_UPGRADE_PANEL, EVENT_MOUSE_CLICK, EVENT_TOGGLE_PAUSE, EVENT_GAME_OVER, EVENT_QUIT, EVENT_SOUND_VOLUME_CHANGED, EVENT_BOSS_NEAR, EVENT_MANUAL_FIRE, EVENT_ULTI_USED, EVENT_TOGGLE_UPGRADE_DEBUG, EVENT_UPGRADE_DEBUG_ADJUST, EVENT_UPGRADE_DEBUG_SAVE, EVENT_UPGRADE_DEBUG_SELECT_TYPE, EVENT_UPGRADE_DEBUG_TOGGLE_LIMITS, EVENT_TOGGLE_MENU_DEBUG, EVENT_TOGGLE_SETTINGS_DEBUG, EVENT_TOGGLE_GO_DEBUG, EVENT_TOGGLE_PAUSED_DEBUG, EVENT_TOGGLE_DEBUG_RESIZE_MODE, EVENT_TOGGLE_HUD_DEBUG
+from core.events import Event, EventManager, EVENT_ENEMY_KILLED, EVENT_TOWER_UPGRADED, EVENT_COINS_UPDATED, EVENT_TOGGLE_UPGRADE_PANEL, EVENT_MOUSE_CLICK, EVENT_TOGGLE_PAUSE, EVENT_GAME_OVER, EVENT_QUIT, EVENT_MANUAL_FIRE, EVENT_ULTI_USED, EVENT_TOGGLE_UPGRADE_DEBUG, EVENT_UPGRADE_DEBUG_ADJUST, EVENT_UPGRADE_DEBUG_SAVE, EVENT_UPGRADE_DEBUG_SELECT_TYPE, EVENT_UPGRADE_DEBUG_TOGGLE_LIMITS, EVENT_TOGGLE_MENU_DEBUG, EVENT_TOGGLE_SETTINGS_DEBUG, EVENT_TOGGLE_GO_DEBUG, EVENT_TOGGLE_PAUSED_DEBUG, EVENT_TOGGLE_DEBUG_RESIZE_MODE, EVENT_TOGGLE_HUD_DEBUG
 from core.logger import init_logging, get_logger
 from core.config import load_settings
 
@@ -176,6 +176,7 @@ class GameEngine:
             'back': (0.51225, 0.6556666666666666),
             'vol_up': (0.613, 0.4806666666666667),
             'vol_down': (0.61, 0.5413333333333333),
+            'music_slider': (0.50625, 0.62),
         }
         self.settings_debug_selected = 'fs_toggle'
         self.go_debug = False
@@ -184,7 +185,7 @@ class GameEngine:
         self.paused_btn_pos = {'continue': (0.5, 0.39899999999999997), 'settings': (0.503, 0.478), 'exit': (0.503, 0.5579999999999999), 'quit': (0.503, 0.641)}
         self.paused_btn_scale = {'continue': (0.838, 1.0), 'settings': (0.8140000000000001, 1.213), 'exit': (0.835, 1.222), 'quit': (0.811, 1.2369999999999994)}
         self.menu_btn_scale = {'start': (0.632, 0.5679999999999996), 'settings': (0.608, 0.649), 'exit': (0.584, 0.6159999999999999)}
-        self.settings_btn_scale = {'fs_toggle': (1.0, 1.0), 'sound_toggle': (1.0, 0.9009999999999998), 'back': (0.994, 0.8469999999999995), 'vol_up': (0.664, 0.9129999999999993), 'vol_down': (0.7570000000000001, 0.988)}
+        self.settings_btn_scale = {'fs_toggle': (1.0, 1.0), 'sound_toggle': (1.0, 0.9009999999999998), 'back': (0.994, 0.8469999999999995), 'vol_up': (0.664, 0.9129999999999993), 'vol_down': (0.7570000000000001, 0.988), 'music_slider': (1.0, 1.0), 'music_knob': (1.0, 1.0)}
         self.paused_debug_selected = 'continue'
         self.debug_resize_mode = False
         self.hud_debug = False
@@ -207,7 +208,17 @@ class GameEngine:
         self.tower_hp_max = 90
         self.tower_hp = self.tower_hp_max
         self.sound_volume = 1.0
+        self.music_volume = 0.5
         self.particles = []
+        self.wave_index = 1
+        self.wave_duration_ms = 30000
+        self.wave_elapsed_ms = 0
+        self.wave_enemy_base = 10
+        self.wave_enemy_increment = 2
+        self.wave_enemies_target = self.wave_enemy_base + (self.wave_index - 1) * self.wave_enemy_increment
+        self.wave_enemies_spawned = 0
+        self.wave_in_boss_phase = False
+        self.wave_banner_ms = 0
         from engine.pool import BulletPool
         self.bullet_pool = BulletPool()
         self.camera_offset = (0, 0)
@@ -252,7 +263,7 @@ class GameEngine:
         }
         if not self.towers:
             from engine.factory import create_tower
-            self.towers.append(create_tower((self.width - self.cell * 2, self.path_y - 80), range_px=200, fire_rate_ms=300))
+            self.towers.append(create_tower((self.width - self.cell * 2, self.path_y - 80), range_px=300, fire_rate_ms=300))
         try:
             from assets.loader import load_images as _load_images, load_enemy_frames as _load_enemy_frames
             _load_images(self)
@@ -261,18 +272,16 @@ class GameEngine:
             logger = get_logger(__name__)
             logger.error("Assets load error: %s", e)
             self.map_img = None
-        cfg = load_settings(os.path.dirname(__file__))
+        cfg = load_settings(getattr(sys, '_MEIPASS', os.path.dirname(__file__)))
         self.sound_volume = float(cfg.get('sfx_volume', self.sound_volume))
+        self.music_volume = float(cfg.get('music_volume', self.music_volume))
         self.fullscreen = bool(cfg.get('fullscreen', self.fullscreen))
         self.apply_display_mode()
 
     def notify(self, event):
         if event.name == EVENT_QUIT:
             self.running = False
-        elif event.name == EVENT_TOWER_PLACED:
-            pass
-        elif event.name == EVENT_PATH_SET:
-            pass
+        
         elif event.name == EVENT_TOGGLE_UPGRADE_PANEL:
             self.upgrade_open = not self.upgrade_open
         elif event.name == EVENT_TOGGLE_PAUSE:
@@ -524,6 +533,26 @@ class GameEngine:
             from ui.upgrade import handle_upgrade_click as _h
             _h(self, pos)
         elif self.state == 'playing':
+            # First, allow clicking ULTI bar to trigger ulti when ready
+            try:
+                s = getattr(self, 'ui_scale', 1.0)
+                hp = getattr(self, 'hud_pos', {'ulti': (0.12, 0.20)})
+                hs = getattr(self, 'hud_scale', {'ulti': (1.0, 1.0)})
+                bw, bh = int(self.BASE_HUD_SIZE[0] * s), int(self.BASE_HUD_SIZE[1] * s)
+                ur_w = max(8, int(bw * hs['ulti'][0]))
+                ur_h = max(8, int(int(20 * s) * hs['ulti'][1]))
+                ur_rect = pygame.Rect(0, 0, ur_w, ur_h)
+                ur_rect.center = (int(self.width * hp['ulti'][0]), int(self.height * hp['ulti'][1]))
+                if ur_rect.collidepoint(pos) and self.ulti_charge >= self.ulti_max:
+                    try:
+                        self.ev_manager.post(Event(EVENT_UI_CLICK, data={'id': 'hud:ulti'}))
+                    except Exception:
+                        pass
+                    self.trigger_ulti()
+                    return
+            except Exception:
+                pass
+            # Otherwise, normal tower selection
             from gameplay.towers import select_tower as _sel
             _sel(self, pos)
 
@@ -594,13 +623,7 @@ class GameEngine:
         from engine.upgrades import apply_upgrade as _au
         _au(self, up_type)
 
-    def enemy_speed_for_time(self, t_ms):
-        from gameplay.enemies import enemy_speed_for_time as _es
-        return _es(self, t_ms)
-
-    def spawn_params_for_time(self, t_ms):
-        from gameplay.enemies import spawn_params_for_time as _sp
-        return _sp(self, t_ms)
+    
 
     def update(self, dt_ms):
         if self.state == 'paused':
@@ -627,6 +650,8 @@ class GameEngine:
             self.boss_alert_ms = max(0, self.boss_alert_ms - dt_ms)
         if self.boss_banner_ms > 0:
             self.boss_banner_ms = max(0, self.boss_banner_ms - dt_ms)
+        if getattr(self, 'wave_banner_ms', 0) > 0:
+            self.wave_banner_ms = max(0, self.wave_banner_ms - dt_ms)
         if getattr(self, 'hit_overlay_ms', 0) > 0:
             self.hit_overlay_ms = max(0, self.hit_overlay_ms - dt_ms)
 
@@ -737,9 +762,7 @@ class GameEngine:
             self.draw()
             pygame.display.flip()
 
-    def get_upgrade_buttons(self):
-        from engine.upgrades import get_buttons as _gb
-        return _gb(self)
+    
 
     def draw_upgrade_panel(self):
         from ui.upgrade import draw_upgrade_panel as _up
@@ -767,6 +790,13 @@ class GameEngine:
         self.elapsed_ms = 0; self.spawn_ms = 0
         self.next_boss_ms = self.boss_interval_ms
         self.boss_alert_ms = 0; self.boss_banner_ms = 0
+        # Reset waves
+        self.wave_index = 1
+        self.wave_elapsed_ms = 0
+        self.wave_enemies_target = self.wave_enemy_base
+        self.wave_enemies_spawned = 0
+        self.wave_in_boss_phase = False
+        self.wave_banner_ms = 0
         self.selected_tower_idx = None
         self.ulti_charge = 0
         self.tower_hp = self.tower_hp_max
@@ -779,11 +809,11 @@ class GameEngine:
         self.ev_manager.post(Event(EVENT_COINS_UPDATED, data={'coins': self.coins}))
         # Kuleleri varsayılana döndür ve upgrade seviyelerine göre uygulama yap
         from engine.factory import create_tower
-        base_tower = create_tower((self.width - self.cell * 2, self.path_y - 80), range_px=200, fire_rate_ms=300)
+        base_tower = create_tower((self.width - self.cell * 2, self.path_y - 80), range_px=300, fire_rate_ms=300)
         r_lvl = int(self.upgrade_levels.get('range', 0))
         fr_lvl = int(self.upgrade_levels.get('firerate', 0))
         if r_lvl > 0:
-            base_tower['range'] = int(base_tower['range'] + r_lvl * self.RANGE_UP_AMOUNT)
+            base_tower['range'] = int(base_tower['range'] * (2.0 ** r_lvl))
         if fr_lvl > 0:
             base_tower['fire_rate'] = max(100, base_tower['fire_rate'] - fr_lvl * self.FIRERATE_DELTA)
         self.towers = [base_tower]

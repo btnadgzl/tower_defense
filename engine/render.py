@@ -113,8 +113,6 @@ def draw_enemies(engine: Any) -> None:
         else:
             pygame.draw.circle(engine.screen, (220, 80, 80), (cx, cy), 10)
         if enemy.get('boss'):
-            pulse = 8 + int(6 * math.sin(engine.elapsed_ms / 200.0))
-            pygame.draw.circle(engine.screen, (200, 40, 40), (cx, cy), 24 + pulse, 2)
             btxt = engine.font.render("BOSS", True, (240, 200, 200))
             engine.screen.blit(btxt, (cx - 20, cy - 50))
         maxw = 40
@@ -181,6 +179,24 @@ def draw_letterbox_boss(engine: Any) -> None:
     x_end = engine.width + tw2
     tx = int(x_start + (x_end - x_start) * p)
     ty = engine.height // 2
+    rect = txt.get_rect(center=(tx, ty))
+    engine.screen.blit(txt, rect)
+
+def draw_wave_banner(engine: Any) -> None:
+    if engine.state != 'playing' or getattr(engine, 'wave_banner_ms', 0) <= 0:
+        return
+    dur = 2500.0
+    p = max(0.0, min(1.0, 1.0 - engine.wave_banner_ms / dur))
+    msg = f"Wave {getattr(engine, 'wave_index', 1)}"
+    base = engine.font_big.render(msg, True, (240, 240, 240))
+    tw, th = base.get_size()
+    scale = 1.2
+    txt = pygame.transform.smoothscale(base, (int(tw * scale), int(th * scale)))
+    tw2, th2 = txt.get_size()
+    x_start = -tw2
+    x_end = engine.width + tw2
+    tx = int(x_start + (x_end - x_start) * p)
+    ty = int(engine.height * 0.20)
     rect = txt.get_rect(center=(tx, ty))
     engine.screen.blit(txt, rect)
 

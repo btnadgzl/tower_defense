@@ -97,7 +97,7 @@ def draw_ui(engine):
     enemies_val = str(len(engine.enemies))
     _draw_text_shadow(engine.screen, enemies_font, enemies_val, (240, 240, 240), align='midleft', pos=(en_rect.right + int(8 * s), en_rect.centery))
     if engine.state in ('playing','paused'):
-        wave = 1 + int(engine.elapsed_ms / 20000)
+        wave = getattr(engine, 'wave_index', 1)
         wtext = f"Wave {wave}"
         wave_font = engine.counter_font or engine.font
         if 'wave' in hp:

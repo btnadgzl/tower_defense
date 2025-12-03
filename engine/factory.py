@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import Dict, Tuple, Any
 
 
-def create_tower(pos: Tuple[int, int], range_px: int = 200, fire_rate_ms: int = 300) -> Dict[str, Any]:
+def create_tower(pos: Tuple[int, int], range_px: int = 300, fire_rate_ms: int = 300) -> Dict[str, Any]:
     return {
         'pos': (pos[0], pos[1]),
         'range': int(range_px),
@@ -19,4 +19,3 @@ def create_enemy(pos: Tuple[int, int], hp: int, speed: float, boss: bool = False
         'boss': bool(boss),
         'knockback': None,
     }
-
