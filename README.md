@@ -1,62 +1,63 @@
-# Oyun Deneme
+# Game Trial
 
-## Genel Bakış
-- Basit bir tower defense oyunu; modüler mimari ile yazıldı.
-- Event/Observer, Strategy ve Factory desenleri kullanır.
-- Tek dosya `.exe` veya Python ile kaynak koddan çalıştırılabilir.
+## Overview
+- A simple **Tower Defense** game built with a **modular architecture**.
+- Implements **Event/Observer**, **Strategy**, and **Factory** design patterns.
+- Can be executed as a standalone `.exe` or from the Python source code.
 
-## Özellikler
-- Event tabanlı giriş ve UI yönetimi (`core/events.py`).
-- Hedef seçimi için strateji sınıfları (`gameplay/strategy.py`).
-- Varlık üretimi için factory (`engine/factory.py`).
-- Basit object pool ile mermi yönetimi (`engine/pool.py`).
-- Modernize edilmiş UI elementleri (`ui/elements.py`).
+## Features
+- **Event-driven** input and UI management (`core/events.py`).
+- **Targeting strategies** for sophisticated enemy selection (`gameplay/strategy.py`).
+- **Entity Factory** for dynamic object creation (`engine/factory.py`).
+- Efficient bullet management using a simple **Object Pool** (`engine/pool.py`).
+- Modernized and responsive UI elements (`ui/elements.py`).
 
-## Çalıştırma
-- Tek dosya exe ile:
-  - PowerShell: `& "C:\Users\BATIN\Desktop\oyun denemesi\oyun_deneme\OyunDeneme.exe"`
-  - Klasöre giderek: `cd "C:\Users\BATIN\Desktop\oyun denemesi\oyun_deneme"` ardından `.\nOyunDeneme.exe`
-- Kaynak koddan (Python 3.12+ önerilir):
-  - `python "C:\Users\BATIN\Desktop\oyun denemesi\oyun_deneme\game.py"`
+## How to Run
 
-## Paketleme (PyInstaller)
-- Tek dosya exe üretmek:
-  - `pyinstaller --noconfirm --clean --onefile --name OyunDeneme "C:\Users\BATIN\Desktop\oyun denemesi\oyun_deneme\game.py" --add-data "C:\Users\BATIN\Desktop\oyun denemesi\oyun_deneme\assets;assets" --add-data "C:\Users\BATIN\Desktop\oyun denemesi\oyun_deneme\settings.json;."`
-- Konsol penceresini gizlemek için `--windowed` ekleyebilirsin.
-- Derleme artıkları (`build`, `dist`, `*.spec`) oyun çalışması için gerekli değildir; isteğe bağlı temizlenebilir.
+### Via Standalone Executable
+- **PowerShell:**
+  ```powershell
+  & ".\OyunDeneme.exe"
 
-## Yapı
-- `assets/` oyun görselleri ve sesler
-- `core/` çekirdek event ve logging, config loader
-- `engine/` render, transitions, upgrades, factory/pool
-- `gameplay/` towers/enemies/bullets, strategy
-- `systems/` input/sound/score
-- `ui/` hud/menu/overlays/settings/upgrade, UIElement tabanı
-- `game.py` oyun motoru ve ana döngü
-- `settings.json` kullanıcı ayarları
+  Manual Launch: Navigate to the folder and double-click OyunDeneme.exe.
 
-## Ayarlar (`settings.json`)
-- `music_volume`: `0.0`–`1.0`
-- `sfx_volume`: `0.0`–`1.0`
-- `fullscreen`: `true/false`
-- `show_fps`: `true/false`
-- `difficulty`: `easy|normal|hard`
-- `controls`: ileri kullanım için rezerv; sözlük olmalı
+From Source Code
+Python 3.12+ is recommended.
+Packaging (PyInstaller)
+To generate a standalone .exe file:
 
-## Kontroller
-- `Space`: Manuel ateş
-- `U`: Upgrade panelini aç/kapat
-- `Q`: Ulti kullan
-- `Esc`: Pause/Continue
-- `1/2/3`: Upgrade kısayolları (range/firerate/bullet)
-- Debug (isteğe bağlı): `F1,F2,F3,F4,F5,F6,F7,F8,F9,F10`, `Tab`, `Ctrl+S`
+Build Command:
+pyinstaller --noconfirm --clean --onefile --name OyunDeneme "game.py" --add-data "assets;assets" --add-data "settings.json;."
+Note: Add the --windowed flag to hide the console window upon launch.
+Project Structure
+assets/: Game visuals and audio files.
+core/: Core events, logging, and configuration loader.
+engine/: Rendering, transitions, upgrades, factory, and object pooling.
+gameplay/: Towers, enemies, bullets, and targeting strategies.
+systems/: Input, sound, and scoring systems.
+ui/: HUD, menus, overlays, settings, upgrades, and UIElement base class.
+game.py: Main game engine and the primary game loop.
+settings.json: User-defined configurations.
 
-## Sorun Giderme
-- Boşluk içeren yolu komut satırında çalıştırırken tırnak ve çağrı operatörü kullan:
-  - `& "C:\Users\BATIN\Desktop\oyun denemesi\oyun_deneme\OyunDeneme.exe"`
-- Exe’de asset/ayar yükleme: kod `sys._MEIPASS` ile paket yolu destekler.
-- `Event` hatası: UI modüllerinde `Event` ve sabitler modül başında import edilir.
+Settings (settings.json)
+Key,Value Range / Type
+music_volume,0.0–1.0
+sfx_volume,0.0–1.0
+fullscreen,true / false
+show_fps,true / false
+difficulty,easy
 
-## Lisans ve Asset Notları
-- Asset dosyaları telif durumuna göre lisanslanmalıdır; harici paylaşımda uygun lisansı ekle.
+Controls
+Space: Manual Fire
+U: Toggle Upgrade Panel
+Q: Use Ultimate Ability
+Esc: Pause / Resume
+1 / 2 / 3: Upgrade Shortcuts (Range / Fire Rate / Bullet)
+Debug Keys: F1-F10, Tab, Ctrl+S
 
+Troubleshooting
+Asset Loading in EXE: The code supports bundled paths using sys._MEIPASS for PyInstaller compatibility.
+Event Errors: Ensure Event and constants are imported at the top of UI modules.
+
+License and Assets
+Asset files should be licensed according to their original terms. Please include appropriate licensing documentation when sharing externally.
