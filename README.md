@@ -1,7 +1,7 @@
 # Tower Defense II — Royal Guard (Tactical Pixel-Art Edition)
 
 ## Overview
-**Tower Defense II: Royal Guard** is a modular 2D fantasy tower defense game built in **Python** and **Pygame**. Inspired by tactical slot-based defense games like *Kingdom Rush*, it features a custom **Procedural Pixel-Art & Terrain Baking Engine** (`graphics/pixel_gen.py`, `graphics/map_baker.py`) paired with a **Real-Time 2D Dynamic Lighting & Additive Bloom Pipeline** (`graphics/lighting.py`), a **Living World & Persistent Battlefield Decal System** (`systems/world_fx.py`), a **Controllable Royal Paladin Hero Unit** (`gameplay/hero.py`), and **3 Distinct Procedural Fantasy Biomes**—all rendered in code without relying on external static sprite sheets.
+**Tower Defense II: Royal Guard** is a modular 2D fantasy tower defense game built in **Python** and **Pygame**. Inspired by tactical slot-based defense games like *Kingdom Rush*, it features a custom **Procedural Pixel-Art & Terrain Baking Engine** (`graphics/pixel_gen.py`, `graphics/map_baker.py`) paired with a **Real-Time 2D Dynamic Lighting & Additive Bloom Pipeline** (`graphics/lighting.py`), a **Living World & Persistent Battlefield Decal System** (`systems/world_fx.py`), a **Controllable Royal Paladin Hero Unit** (`gameplay/hero.py`), **3 Distinct Procedural Fantasy Biomes**, and a **Fluid Procedural Explosion & Particle FX Engine** (`systems/particles.py`)—all rendered procedurally in code without external static sprite sheets.
 
 > **Note:** The original v1 prototype is preserved in the [`legacy_v1/`](./legacy_v1) directory for historical reference.
 
@@ -24,11 +24,13 @@
 - **Real-Time 2D Dynamic Lighting & Bloom (`graphics/lighting.py`):**
   - Smooth Day -> Sunset -> Night progression across campaign waves (or manual mode cycling via **`[L]`**).
   - Multiplicative ambient lightmap (`BLEND_RGB_MULT`) combined with an additive HDR-style bloom pass (`BLEND_RGB_ADD`) for glowing Frost/Arcane spires, hero holy aura, castle torches, enemy spawn portal, Boss Golem magma core, molten lava river, projectiles, and falling meteors.
-- **Multi-Stage Procedural Explosion FX (`systems/particles.py`, `graphics/lighting.py`):**
-  - **Dynamic Multi-Lobe Fireball:** Starts with a white-hot core and fiery orange lobes outlined with crisp 1px pixel contours, rapidly expanding during the initial detonation.
-  - **Billowing Smoke & Buoyancy:** Fireballs organically cool into billowing charcoal smoke clouds with glowing internal embers, floating upward and dispersing.
-  - **Dual Concussion Shockwaves & Flying Shrapnel:** Fast vapor concussion ring paired with an intense fire wave, arcing glowing spark embers, solid tumbling rock shrapnel, and negative-gravity rising smoke.
-  - **Detonation Light & Bloom Flash:** Explosions, meteor impacts, and the Paladin's Holy Judgment immediately trigger instant dynamic point light flashes in the 2D lighting engine that bathe the surrounding scenery in vivid bloom.
+- **Fluid Procedural Explosion Engine (`systems/particles.py`, `graphics/lighting.py`):**
+  - **Directional Ground Blast & Upward Mushroom Plume:** Simulates ground impact deflection that channels explosive kinetic energy upward into a boiling, organic chimney plume with cauliflower micro-offsets and hypersonic starburst flame tendrils.
+  - **Volumetric Multi-Pass Color Evolution:** Transitions smoothly from a blinding white-hot ignition core (`t < 0.24`) to saturated fiery orange/crimson, cooling into rich amber and expanding into rolling charcoal smoke with lingering internal embers before dissolving into the air with smooth per-pixel alpha falloff.
+  - **High-Velocity Tracer Sparks with Motion Blur:** Incandescent shrapnel sparks render as dynamic velocity streaks along their flight vectors with glowing white heads, air resistance deceleration, and parabolic gravity arcs.
+  - **Dual Supersonic Shockwaves & Tumbling Debris:** Smooth alpha concussion vapor rings paired with intense thermal blast waves and rotating polygonal rock/metal shrapnel chunks.
+  - **Thematic Elemental FX:** Tailored visual profiles for **Roaring Fire** (Artillery mortars, Meteor strikes), **Glacial Frost Nova** (Frost Spire, Royal Blizzard with icy cyan mist and shattered crystal shards), and **Radiant Holy Burst** (Sir Roland's Holy Judgment with solar ray bursts and consecrated golden dust).
+  - **Detonation Light & Bloom Flash:** Explosions immediately trigger synchronized point light flashes in the 2D lighting engine, illuminating the terrain in vivid HDR bloom.
 - **Living World & Persistent Battlefield Decals (`systems/world_fx.py`):**
   - Persistent fading ground decals: artillery/meteor scorch craters, frost spire ice patches, holy judgment sigils, and combat splats.
   - Animated river/lava current foam ripples, wind-blown biome foliage/embers, and glowing night fireflies.
