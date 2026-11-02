@@ -11,6 +11,7 @@ class GameHUD:
 
     def __init__(self) -> None:
         self.call_wave_rect = pygame.Rect(0, 0, 10, 10)
+        self.light_btn_rect = pygame.Rect(0, 0, 10, 10)
         self.speed_btn_rect = pygame.Rect(0, 0, 10, 10)
         self.pause_btn_rect = pygame.Rect(0, 0, 10, 10)
         self.meteor_btn_rect = pygame.Rect(0, 0, 10, 10)
@@ -115,9 +116,21 @@ class GameHUD:
                 align="midleft",
             )
 
-        # 3. Top Right Controls: Speed Toggle (1x/2x) & Pause
+        # 3. Top Right Controls: Lighting Mode [L], Speed Toggle (1x/2x) & Pause
+        self.light_btn_rect = pygame.Rect(w - int(350 * s), int(12 * s), int(146 * s), int(40 * s))
         self.speed_btn_rect = pygame.Rect(w - int(195 * s), int(12 * s), int(86 * s), int(40 * s))
         self.pause_btn_rect = pygame.Rect(w - int(100 * s), int(12 * s), int(88 * s), int(40 * s))
+
+        light_label = f"Light: {game_scene.lighting.mode_label} [L]"
+        draw_pixel_button(
+            surface,
+            self.light_btn_rect,
+            light_label,
+            game_scene.font_small,
+            hovered=self.light_btn_rect.collidepoint(mx, my),
+            active=(game_scene.lighting.mode != "day"),
+            accent_color=pal.ARCANE_DARK if game_scene.lighting.darkness_factor > 0.25 else pal.UI_BG_MID,
+        )
 
         spd_label = f"Speed: {int(game_scene.game_speed)}x"
         draw_pixel_button(

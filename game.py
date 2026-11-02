@@ -40,6 +40,7 @@ from core.logger import init_logging, get_logger
 from graphics import palette as pal
 from graphics.pixel_gen import PixelArtGenerator
 from graphics.map_baker import bake_pixel_map
+from graphics.lighting import LightingEngine
 from graphics.ui_kit import draw_text_shadow
 from gameplay.path import RoadPath, BuildSlot
 from gameplay.enemies import Enemy
@@ -47,6 +48,7 @@ from gameplay.towers import Tower
 from gameplay.projectiles import Projectile, ProjectilePool, LightningBoltVisual
 from gameplay.waves import WaveManager
 from systems.particles import ParticleSystem
+from systems.world_fx import WorldEffectsSystem
 from systems.sound import SoundSystem
 from ui.radial_menu import RadialMenu
 from ui.hud import GameHUD
@@ -89,9 +91,11 @@ class TowerDefenseGame:
         # Fonts
         self._init_fonts(1.0)
 
-        # World & Gameplay Systems
+        # World, Lighting & Gameplay Systems
         self.road = RoadPath(self.width, self.height)
         self.map_surface: Optional[pygame.Surface] = None
+        self.lighting = LightingEngine(self.width, self.height)
+        self.world_fx = WorldEffectsSystem(self.width, self.height)
         self.wave_mgr = WaveManager()
         self.proj_pool = ProjectilePool()
         self.particles = ParticleSystem()
@@ -159,6 +163,8 @@ class TowerDefenseGame:
         self.pixel_gen.clear_cache(self.pixel_scale)
         self._init_fonts(self.ui_scale)
         self.road.rebuild(self.width, self.height)
+        self.lighting.resize(self.width, self.height)
+        self.world_fx.resize(self.width, self.height)
         self.map_surface = bake_pixel_map(
             self.width,
             self.height,
@@ -184,6 +190,7 @@ class TowerDefenseGame:
         self.lightning_arcs.clear()
         self.falling_meteors.clear()
         self.particles.clear()
+        self.world_fx.clear()
         self.radial_menu.close()
 
         for sl in self.road.slots:
@@ -251,6 +258,16 @@ class TowerDefenseGame:
         if key == pygame.K_SPACE:
             self.game_speed = 2.0 if self.game_speed == 1.0 else 1.0
             self.ev_manager.post(Event(EVENT_UI_CLICK))
+        # Cycle Dynamic Lighting Mode [L]
+        elif key == pygame.K_l:
+            self.lighting.cycle_mode()
+            self.ev_manager.post(Event(EVENT_UI_CLICK))
+            self.particles.add_floating_text(
+                (self.width // 2, int(80 * self.ui_scale)),
+                f"Lighting Mode: {self.lighting.mode_label}",
+                pal.GOLD_SHINE,
+                big=True,
+            )
         # Call Wave Early [N]
         elif key == pygame.K_n:
             if self.wave_mgr.state == "prep":
@@ -296,6 +313,16 @@ class TowerDefenseGame:
         # 1. Check HUD Buttons first
         if self.hud.call_wave_rect.collidepoint(pos) and self.wave_mgr.state == "prep":
             self._call_wave_now()
+            return
+        if self.hud.light_btn_rect.collidepoint(pos):
+            self.lighting.cycle_mode()
+            self.ev_manager.post(Event(EVENT_UI_CLICK))
+            self.particles.add_floating_text(
+                (self.width // 2, int(80 * self.ui_scale)),
+                f"Lighting Mode: {self.lighting.mode_label}",
+                pal.GOLD_SHINE,
+                big=True,
+            )
             return
         if self.hud.speed_btn_rect.collidepoint(pos):
             self.game_speed = 2.0 if self.game_speed == 1.0 else 1.0
@@ -450,6 +477,7 @@ class TowerDefenseGame:
                     dmg = e.take_damage(float(cfg["damage"]), "magic")
                     e.apply_slow(float(cfg["slow_factor"]), float(cfg["slow_duration_ms"]))
                     self.particles.spawn_frost_nova(e.pos, 38.0 * self.ui_scale)
+                    self.world_fx.add_frost_patch(e.pos, 42.0 * self.ui_scale)
                     self.on_enemy_damaged(e, dmg, is_crit=False, color=pal.FROST_LIGHT)
             self.trigger_shake(4.0, 260.0)
 
@@ -514,6 +542,8 @@ class TowerDefenseGame:
                     return
 
         self.particles.update(dt_ms)
+        self.world_fx.update(dt_ms)
+        self.lighting.update(raw_dt_ms, max(1, self.wave_mgr.current_wave))
         self._update_camera_shake(raw_dt_ms)
 
     def _update_waves(self, dt_ms: float) -> None:
@@ -580,6 +610,7 @@ class TowerDefenseGame:
                 tx, ty = m["tx"], m["ty"]
                 rad = m["radius"]
                 self.particles.spawn_explosion((tx, ty), rad)
+                self.world_fx.add_scorch_crater((tx, ty), rad)
                 self.trigger_shake(5.5, 250.0)
                 for e in list(self.enemies):
                     if e.alive and math.hypot(e.x - tx, e.y - ty) <= rad:
@@ -625,6 +656,7 @@ class TowerDefenseGame:
         px, py = proj.x, proj.y
         if proj.kind == "bomb":
             self.particles.spawn_explosion((px, py), proj.splash_radius)
+            self.world_fx.add_scorch_crater((px, py), proj.splash_radius)
             self.trigger_shake(3.2, 160.0)
             r2 = proj.splash_radius ** 2
             for e in list(self.enemies):
@@ -633,6 +665,7 @@ class TowerDefenseGame:
                     self.on_enemy_damaged(e, dmg, is_crit=False, color=pal.FIRE_LIGHT)
         elif proj.kind == "frost":
             self.particles.spawn_frost_nova((px, py), proj.splash_radius)
+            self.world_fx.add_frost_patch((px, py), proj.splash_radius)
             r2 = max(24.0, proj.splash_radius) ** 2
             for e in list(self.enemies):
                 if e.alive and ((e.x - px) ** 2 + (e.y - py) ** 2) <= r2:
@@ -669,6 +702,7 @@ class TowerDefenseGame:
         pts = enemy.reward * (10 if enemy.boss else 5)
         self.score += pts
         self._record_high_score()
+        self.world_fx.add_combat_splat(enemy.pos)
         self.particles.spawn_hit(enemy.pos, pal.GOLD_LIGHT if enemy.boss else pal.CRIMSON_LIGHT, count=14 if enemy.boss else 9)
         self.particles.add_floating_text(enemy.pos, f"+{enemy.reward}G", pal.GOLD_SHINE)
         if enemy.boss:
@@ -719,11 +753,12 @@ class TowerDefenseGame:
         ox, oy = self.camera_offset
         s = self.ui_scale
 
-        # 1. Baked Pixel-Art Battleground
+        # 1. Baked Pixel-Art Battleground + Animated River & Ground Decals
         if self.map_surface:
             self.screen.blit(self.map_surface, (ox, oy))
         else:
             self.screen.fill(pal.GRASS_BASE)
+        self.world_fx.draw_ground_layer(self.screen, self.camera_offset)
 
         # 2. Tactical Build Slots & Towers
         for sl in self.road.slots:
@@ -830,10 +865,14 @@ class TowerDefenseGame:
                 msrf = self.pixel_gen.get_projectile_sprite("meteor", 0.0)
                 self.screen.blit(msrf, msrf.get_rect(center=(mx_p, my_p)))
 
-        # 6. Particles & Floating Combat Text
+        # 6. Particles, Floating Combat Text & Canopy Leaves / Fireflies
         self.particles.draw(self.screen, self.camera_offset, self.font_small, self.font_mid)
+        self.world_fx.draw_canopy_layer(self.screen, self.camera_offset)
 
-        # 7. Wave / Spell Announcement Banner
+        # 7. Real-Time 2D Dynamic Lighting & Additive Bloom Pass
+        self.lighting.render_lighting(self.screen, self, self.world_fx)
+
+        # 8. Wave / Spell Announcement Banner
         if self.banner_timer_ms > 0.0 and self.banner_text:
             draw_text_shadow(
                 self.screen,
@@ -844,7 +883,7 @@ class TowerDefenseGame:
                 align="center",
             )
 
-        # 8. Radial Menu & HUD & Overlays
+        # 9. Radial Menu & HUD & Overlays (Rendered crisp on top of lighting)
         self.radial_menu.draw(self.screen, self)
         self.hud.draw(self.screen, self)
         self.menus.draw_overlay(self.screen, self)
