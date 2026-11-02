@@ -9,7 +9,7 @@ OUTLINE_DARK: Color = (22, 18, 30)
 OUTLINE_SOFT: Color = (38, 33, 50)
 SHADOW_ALPHA: ColorA = (12, 10, 20, 110)
 
-# --- Nature / Grass Ramps ---
+# --- Nature / Grass Ramps (Emerald Grasslands) ---
 GRASS_DEEP: Color = (42, 92, 55)
 GRASS_BASE: Color = (56, 118, 64)
 GRASS_MID: Color = (72, 140, 72)
@@ -26,6 +26,32 @@ LEAF_AUTUMN: Color = (196, 112, 52)
 WATER_DEEP: Color = (36, 82, 136)
 WATER_MID: Color = (52, 116, 176)
 WATER_FOAM: Color = (165, 222, 245)
+
+# --- Frozen Tundra Biome Ramps ---
+TUNDRA_DEEP: Color = (135, 168, 198)
+TUNDRA_BASE: Color = (168, 198, 224)
+TUNDRA_MID: Color = (195, 222, 242)
+TUNDRA_LIGHT: Color = (224, 242, 255)
+TUNDRA_HIGHLIGHT: Color = (245, 252, 255)
+TUNDRA_PATH_DARK: Color = (82, 96, 118)
+TUNDRA_PATH_MID: Color = (106, 122, 146)
+TUNDRA_PATH_LIGHT: Color = (136, 154, 178)
+PINE_DARK: Color = (28, 64, 72)
+PINE_MID: Color = (44, 92, 98)
+PINE_SNOW: Color = (225, 244, 255)
+
+# --- Volcanic Ashlands Biome Ramps ---
+ASH_DEEP: Color = (36, 30, 38)
+ASH_BASE: Color = (48, 40, 50)
+ASH_MID: Color = (62, 52, 64)
+ASH_LIGHT: Color = (78, 64, 78)
+ASH_HIGHLIGHT: Color = (108, 82, 86)
+ASH_PATH_DARK: Color = (68, 44, 42)
+ASH_PATH_MID: Color = (88, 56, 52)
+ASH_PATH_LIGHT: Color = (118, 72, 62)
+LAVA_DEEP: Color = (168, 38, 24)
+LAVA_MID: Color = (232, 92, 28)
+LAVA_BRIGHT: Color = (255, 188, 58)
 
 # --- Cobblestone Path & Castle Stone Ramps ---
 PATH_DIRT_DARK: Color = (108, 84, 62)
@@ -95,4 +121,3 @@ UI_TEXT_MUTED: Color = (172, 166, 186)
 UI_RED: Color = (220, 62, 68)
 UI_GREEN: Color = (78, 198, 96)
 UI_CYAN: Color = (88, 200, 245)
-
