@@ -1,1 +1,2 @@
-__all__ = ['hud', 'overlays', 'settings']
+"""UI package for Tower Defense 2.0."""
+

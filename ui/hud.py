@@ -1,135 +1,246 @@
+from __future__ import annotations
+from typing import Any, Tuple
 import pygame
+from core.config import SPELLS_CONFIG
+from graphics import palette as pal
+from graphics.ui_kit import draw_pixel_panel, draw_pixel_button, draw_pixel_bar, draw_text_shadow
 
-def _draw_text_shadow(screen, font, text, color, rect=None, align='center', pos=None):
-    if rect is None:
-        rect = font.render(text, True, color).get_rect(**{align: pos})
-    for dx, dy in [(-1,0),(1,0),(0,-1),(0,1)]:
-        screen.blit(font.render(text, True, (0, 0, 0)), (rect.x + dx, rect.y + dy))
-    screen.blit(font.render(text, True, color), rect)
-    return rect
 
-def draw_ui(engine):
-    s = getattr(engine, 'ui_scale', 1.0)
-    hp = getattr(engine, 'hud_pos', {'healthbar': (0.12, 0.10), 'coinbar': (0.32, 0.10), 'enemies': (0.52, 0.10), 'ulti': (0.12, 0.20)})
-    hs = getattr(engine, 'hud_scale', {'healthbar': (1.0, 1.0), 'coinbar': (1.0, 1.0), 'enemies': (1.0, 1.0), 'ulti': (1.0, 1.0)})
-    bw, bh = int(engine.BASE_HUD_SIZE[0] * s), int(engine.BASE_HUD_SIZE[1] * s)
-    hb_rect = pygame.Rect(0, 0, max(8, int(bw * hs['healthbar'][0])), max(8, int(bh * hs['healthbar'][1])))
-    cb_rect = pygame.Rect(0, 0, max(8, int(bw * hs['coinbar'][0])), max(8, int(bh * hs['coinbar'][1])))
-    en_rect = pygame.Rect(0, 0, max(8, int(bw * hs['enemies'][0])), max(8, int(bh * hs['enemies'][1])))
-    hb_rect.center = (int(engine.width * hp['healthbar'][0]), int(engine.height * hp['healthbar'][1]))
-    cb_rect.center = (int(engine.width * hp['coinbar'][0]), int(engine.height * hp['coinbar'][1]))
-    en_rect.center = (int(engine.width * hp['enemies'][0]), int(engine.height * hp['enemies'][1]))
-    hb_img = None
-    if getattr(engine, 'healthbar_imgs', None):
-        if engine.tower_hp_max > 0:
-            pct = max(0.0, min(1.0, engine.tower_hp / float(engine.tower_hp_max)))
+class GameHUD:
+    """Renders the top kingdom status bar, wave controls, active spell buttons, and Boss HP bar."""
+
+    def __init__(self) -> None:
+        self.call_wave_rect = pygame.Rect(0, 0, 10, 10)
+        self.speed_btn_rect = pygame.Rect(0, 0, 10, 10)
+        self.pause_btn_rect = pygame.Rect(0, 0, 10, 10)
+        self.meteor_btn_rect = pygame.Rect(0, 0, 10, 10)
+        self.blizzard_btn_rect = pygame.Rect(0, 0, 10, 10)
+
+    def draw(self, surface: pygame.Surface, game_scene: Any) -> None:
+        s = game_scene.ui_scale
+        w, h = game_scene.width, game_scene.height
+        mx, my = pygame.mouse.get_pos()
+
+        # 1. Top Left Panel: Castle HP & Gold & Score
+        status_rect = pygame.Rect(int(12 * s), int(10 * s), int(350 * s), int(46 * s))
+        draw_pixel_panel(surface, status_rect, bg_color=pal.UI_BG_DARK, border_color=pal.UI_BORDER_GOLD)
+
+        # Heart + Castle HP Bar
+        heart_ic = game_scene.pixel_gen.get_icon("heart")
+        surface.blit(heart_ic, (status_rect.left + int(12 * s), status_rect.centery - heart_ic.get_height() // 2))
+        hp_bar_r = pygame.Rect(
+            status_rect.left + int(42 * s),
+            status_rect.centery - int(11 * s),
+            int(115 * s),
+            int(22 * s),
+        )
+        hp_ratio = game_scene.castle_hp / max(1.0, float(game_scene.castle_hp_max))
+        hp_col = pal.UI_GREEN if hp_ratio > 0.5 else (pal.GOLD_MID if hp_ratio > 0.25 else pal.UI_RED)
+        draw_pixel_bar(
+            surface,
+            hp_bar_r,
+            hp_ratio,
+            fill_color=hp_col,
+            label=f"{int(game_scene.castle_hp)}/{int(game_scene.castle_hp_max)}",
+            font=game_scene.font_small,
+        )
+
+        # Coin icon + Gold text
+        coin_ic = game_scene.pixel_gen.get_icon("coin")
+        coin_x = hp_bar_r.right + int(16 * s)
+        surface.blit(coin_ic, (coin_x, status_rect.centery - coin_ic.get_height() // 2))
+        draw_text_shadow(
+            surface,
+            game_scene.font_mid,
+            f"{game_scene.coins}",
+            pal.GOLD_SHINE,
+            pos=(coin_x + coin_ic.get_width() + int(6 * s), status_rect.centery),
+            align="midleft",
+        )
+
+        # Score text on right side of status box
+        draw_text_shadow(
+            surface,
+            game_scene.font_small,
+            f"Score: {game_scene.score}",
+            pal.UI_TEXT_MUTED,
+            pos=(status_rect.right - int(14 * s), status_rect.centery),
+            align="midright",
+        )
+
+        # 2. Top Center Panel: Wave Info & Early Wave Call Button
+        wave_mgr = game_scene.wave_mgr
+        wave_panel = pygame.Rect(0, int(10 * s), int(380 * s), int(46 * s))
+        wave_panel.centerx = w // 2
+        draw_pixel_panel(surface, wave_panel, bg_color=pal.UI_BG_DARK, border_color=pal.UI_BORDER_GOLD)
+
+        wave_ic = game_scene.pixel_gen.get_icon("wave")
+        surface.blit(wave_ic, (wave_panel.left + int(12 * s), wave_panel.centery - wave_ic.get_height() // 2))
+
+        if wave_mgr.state == "prep":
+            secs = max(0, int(wave_mgr.prep_timer_ms / 1000.0) + 1)
+            nxt_num = wave_mgr.current_wave + 1
+            draw_text_shadow(
+                surface,
+                game_scene.font_small,
+                f"Next Wave {nxt_num} ({secs}s)",
+                pal.UI_TEXT_WHITE,
+                pos=(wave_panel.left + int(42 * s), wave_panel.centery),
+                align="midleft",
+            )
+            self.call_wave_rect = pygame.Rect(
+                wave_panel.right - int(162 * s),
+                wave_panel.top + int(7 * s),
+                int(152 * s),
+                int(32 * s),
+            )
+            bonus = max(5, int(wave_mgr.prep_timer_ms / 400.0)) if wave_mgr.current_wave > 0 else 0
+            btn_txt = f"Call (+{bonus}G) [N]" if bonus > 0 else "Start Wave [N]"
+            draw_pixel_button(
+                surface,
+                self.call_wave_rect,
+                btn_txt,
+                game_scene.font_small,
+                hovered=self.call_wave_rect.collidepoint(mx, my),
+                accent_color=pal.ARCHER_GREEN_DARK,
+            )
         else:
-            pct = 1.0
-        idx = max(0, min(5, int(round(pct * 5))))
-        if len(engine.healthbar_imgs) > idx:
-            hb_img = engine.healthbar_imgs[idx]
-    elif engine.healthbar_img:
-        hb_img = engine.healthbar_img
-    if hb_img:
-        iw, ih = hb_img.get_width(), hb_img.get_height()
-        tw, th = hb_rect.width, hb_rect.height
-        img_to_draw = hb_img
-        if (tw, th) != (iw, ih):
-            img_to_draw = pygame.transform.smoothscale(hb_img, (tw, th))
-        engine.screen.blit(img_to_draw, hb_rect)
-    else:
-        pygame.draw.rect(engine.screen, (180, 60, 60), hb_rect)
+            self.call_wave_rect = pygame.Rect(0, 0, 0, 0)
+            draw_text_shadow(
+                surface,
+                game_scene.font_mid,
+                f"Wave {wave_mgr.current_wave}/{wave_mgr.max_campaign_waves}: {wave_mgr.wave_title}",
+                pal.GOLD_SHINE,
+                pos=(wave_panel.left + int(42 * s), wave_panel.centery),
+                align="midleft",
+            )
 
-    # --- ULTI BAR ---
-    ur_w = hb_rect.width
-    ur_h = int(20 * s)
-    ur_w = max(8, int(ur_w * hs['ulti'][0]))
-    ur_h = max(8, int(ur_h * hs['ulti'][1]))
-    ur_rect = pygame.Rect(0, 0, ur_w, ur_h)
-    ur_rect.center = (int(engine.width * hp['ulti'][0]), int(engine.height * hp['ulti'][1]))
-    # Background
-    pygame.draw.rect(engine.screen, (30, 30, 30), ur_rect)
-    # Fill
-    if getattr(engine, 'ulti_max', 0) > 0:
-        pct = engine.ulti_charge / float(engine.ulti_max)
-        fill_w = int(ur_rect.width * pct)
-        fr = pygame.Rect(ur_rect.x, ur_rect.y, fill_w, ur_rect.height)
-        # Color: Blue if charging, Flashing Green/Cyan if ready
-        ucolor = (0, 150, 255)
-        if engine.ulti_charge >= engine.ulti_max:
-            # Simple pulse effect
-            if (pygame.time.get_ticks() // 200) % 2 == 0:
-                ucolor = (100, 255, 100)
-            else:
-                ucolor = (0, 200, 200)
-        pygame.draw.rect(engine.screen, ucolor, fr)
-        
-        # Border
-        pygame.draw.rect(engine.screen, (100, 100, 100), ur_rect, 1)
-        
-        # Text
-        txt_str = "READY (Q)" if engine.ulti_charge >= engine.ulti_max else f"ULTI {engine.ulti_charge}/{engine.ulti_max}"
-        _draw_text_shadow(engine.screen, engine.font_small, txt_str, (255,255,255), rect=ur_rect)
-    # ----------------
+        # 3. Top Right Controls: Speed Toggle (1x/2x) & Pause
+        self.speed_btn_rect = pygame.Rect(w - int(195 * s), int(12 * s), int(86 * s), int(40 * s))
+        self.pause_btn_rect = pygame.Rect(w - int(100 * s), int(12 * s), int(88 * s), int(40 * s))
 
-    if engine.coinbar_img:
-        img = engine.coinbar_img
-        iw, ih = img.get_size()
-        tw, th = cb_rect.size
-        if (tw, th) != (iw, ih):
-            img = pygame.transform.smoothscale(img, (tw, th))
-        engine.screen.blit(img, cb_rect)
-    else:
-        pygame.draw.rect(engine.screen, (220, 180, 80), cb_rect)
-    if engine.enemies_counter_img:
-        img = engine.enemies_counter_img
-        iw, ih = img.get_size()
-        tw, th = en_rect.size
-        if (tw, th) != (iw, ih):
-            img = pygame.transform.smoothscale(img, (tw, th))
-        engine.screen.blit(img, en_rect)
-    else:
-        pygame.draw.rect(engine.screen, (120, 120, 120), en_rect)
-    coin_font = engine.counter_font or engine.font
-    coin_val = str(engine.coins)
-    _draw_text_shadow(engine.screen, coin_font, coin_val, (240, 240, 240), align='midleft', pos=(cb_rect.right + int(8 * s) - 8, cb_rect.centery))
-    enemies_font = engine.counter_font or engine.font
-    enemies_val = str(len(engine.enemies))
-    _draw_text_shadow(engine.screen, enemies_font, enemies_val, (240, 240, 240), align='midleft', pos=(en_rect.right + int(8 * s), en_rect.centery))
-    if engine.state in ('playing','paused'):
-        wave = getattr(engine, 'wave_index', 1)
-        wtext = f"Wave {wave}"
-        wave_font = engine.counter_font or engine.font
-        if 'wave' in hp:
-            wx = int(engine.width * hp['wave'][0]); wy = int(engine.height * hp['wave'][1])
-            wrect = wave_font.render(wtext, True, (220, 220, 220)).get_rect(center=(wx, wy))
+        spd_label = f"Speed: {int(game_scene.game_speed)}x"
+        draw_pixel_button(
+            surface,
+            self.speed_btn_rect,
+            spd_label,
+            game_scene.font_small,
+            hovered=self.speed_btn_rect.collidepoint(mx, my),
+            active=(game_scene.game_speed > 1.0),
+            accent_color=pal.ROYAL_BLUE_DARK if game_scene.game_speed > 1.0 else pal.UI_BG_MID,
+        )
+        draw_pixel_button(
+            surface,
+            self.pause_btn_rect,
+            "Pause",
+            game_scene.font_small,
+            hovered=self.pause_btn_rect.collidepoint(mx, my),
+        )
+
+        # 4. Bottom-Left Active Kingdom Spells Bar ([Q] Meteor, [W] Blizzard)
+        self.meteor_btn_rect = pygame.Rect(int(14 * s), h - int(66 * s), int(204 * s), int(52 * s))
+        self.blizzard_btn_rect = pygame.Rect(int(228 * s), h - int(66 * s), int(208 * s), int(52 * s))
+        self._draw_spell_button(
+            surface,
+            game_scene,
+            self.meteor_btn_rect,
+            "meteor",
+            SPELLS_CONFIG["meteor"]["name"],
+            "Q",
+            game_scene.spell_cooldowns["meteor"],
+            SPELLS_CONFIG["meteor"]["cooldown_ms"],
+            pal.FIRE_MID,
+            (mx, my),
+        )
+        self._draw_spell_button(
+            surface,
+            game_scene,
+            self.blizzard_btn_rect,
+            "blizzard",
+            SPELLS_CONFIG["blizzard"]["name"],
+            "W",
+            game_scene.spell_cooldowns["blizzard"],
+            SPELLS_CONFIG["blizzard"]["cooldown_ms"],
+            pal.FROST_MID,
+            (mx, my),
+        )
+
+        # 5. Boss Health Bar (if a Boss Golem is alive)
+        boss = next((e for e in game_scene.enemies if e.alive and e.boss), None)
+        if boss is not None:
+            b_rect = pygame.Rect(0, int(64 * s), int(420 * s), int(24 * s))
+            b_rect.centerx = w // 2
+            draw_pixel_bar(
+                surface,
+                b_rect,
+                boss.hp / max(1.0, boss.hp_max),
+                fill_color=pal.CRIMSON_LIGHT,
+                border_color=pal.GOLD_MID,
+                label=f"{boss.name}: {int(boss.hp)} / {int(boss.hp_max)}",
+                font=game_scene.font_small,
+            )
+
+        # 6. FPS Counter (Bottom-Right) if enabled in settings
+        if game_scene.settings.get("show_fps", True):
+            fps = int(game_scene.clock.get_fps())
+            draw_text_shadow(
+                surface,
+                game_scene.font_small,
+                f"FPS: {fps}",
+                pal.UI_TEXT_MUTED,
+                pos=(w - int(14 * s), h - int(16 * s)),
+                align="bottomright",
+            )
+
+    @staticmethod
+    def _draw_spell_button(
+        surface: pygame.Surface,
+        game_scene: Any,
+        rect: pygame.Rect,
+        spell_key: str,
+        title: str,
+        hotkey: str,
+        cd_ms: float,
+        max_cd_ms: float,
+        accent: Tuple[int, int, int],
+        mouse_pos: Tuple[int, int],
+    ) -> None:
+        s = game_scene.ui_scale
+        ready = cd_ms <= 0.0
+        hov = rect.collidepoint(mouse_pos) and ready
+        border = pal.GOLD_SHINE if hov else (accent if ready else pal.STONE_DARK)
+        bg = pal.UI_BG_MID if ready else (24, 22, 32)
+        draw_pixel_panel(surface, rect, bg_color=bg, border_color=border, gold_corners=False)
+
+        ic = game_scene.pixel_gen.get_icon(spell_key)
+        surface.blit(ic, (rect.left + int(10 * s), rect.centery - ic.get_height() // 2))
+
+        tx = rect.left + int(42 * s)
+        draw_text_shadow(
+            surface,
+            game_scene.font_small,
+            f"[{hotkey}] {title}",
+            pal.UI_TEXT_WHITE if ready else pal.UI_TEXT_MUTED,
+            pos=(tx, rect.top + int(15 * s)),
+            align="midleft",
+        )
+        if ready:
+            draw_text_shadow(
+                surface,
+                game_scene.font_small,
+                "READY!",
+                pal.GOLD_SHINE,
+                pos=(tx, rect.bottom - int(14 * s)),
+                align="midleft",
+            )
         else:
-            wrect = wave_font.render(wtext, True, (220, 220, 220)).get_rect(midleft=(cb_rect.right + int(40 * s), cb_rect.centery))
-        if not getattr(engine, 'hud_debug', False):
-            if wrect.right > en_rect.x - int(6 * s):
-                wrect.x = en_rect.x - int(6 * s) - wrect.width
-        _draw_text_shadow(engine.screen, wave_font, wtext, (220, 220, 220), rect=wrect)
-        if getattr(engine, 'hud_debug', False):
-            pygame.draw.rect(engine.screen, (0,200,255), wrect, 2)
-    if getattr(engine, 'hud_debug', False):
-        pygame.draw.rect(engine.screen, (0,200,255), hb_rect, 2)
-        pygame.draw.rect(engine.screen, (0,200,255), cb_rect, 2)
-        pygame.draw.rect(engine.screen, (0,200,255), en_rect, 2)
-        pygame.draw.rect(engine.screen, (255,140,0), ur_rect, 2)
-    if engine.state == 'settings':
-        from ui.settings import draw_settings
-        draw_settings(engine)
-    elif engine.state == 'menu':
-        engine.draw_menu()
-    if engine.upgrade_open or getattr(engine, 'upgrade_anim_running', False):
-        engine.draw_upgrade_panel()
-    fps = int(engine.clock.get_fps()) if getattr(engine, 'clock', None) else 0
-    dt = getattr(engine, 'last_dt_ms', 0)
-    txt = f"FPS {fps} | {dt} ms"
-    srf = engine.font_small.render(txt, True, (240, 240, 240))
-    bg = pygame.Surface((srf.get_width()+8, srf.get_height()+4), pygame.SRCALPHA)
-    bg.fill((10, 10, 10, 120))
-    rx = engine.width - (srf.get_width()+8) - 8
-    ry = 8
-    engine.screen.blit(bg, (rx, ry))
-    engine.screen.blit(srf, (rx+4, ry+2))
+            bar_r = pygame.Rect(tx, rect.bottom - int(19 * s), rect.width - int(52 * s), int(12 * s))
+            ratio = 1.0 - (cd_ms / max(1.0, float(max_cd_ms)))
+            draw_pixel_bar(
+                surface,
+                bar_r,
+                ratio,
+                fill_color=accent,
+                label=f"{cd_ms / 1000.0:.1f}s",
+                font=game_scene.font_small,
+            )
