@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Dict, Tuple, Any
 import pygame
-from core.config import DIFFICULTY_PROFILES
+from core.config import DIFFICULTY_PROFILES, BIOME_DEFINITIONS
 from core.events import (
     Event,
     EVENT_UI_CLICK,
@@ -33,25 +33,25 @@ class MenuSystem:
         if game.map_surface:
             surface.blit(game.map_surface, (0, 0))
         dim = pygame.Surface((w, h), pygame.SRCALPHA)
-        dim.fill((12, 10, 22, 155))
+        dim.fill((12, 10, 22, 150))
         surface.blit(dim, (0, 0))
 
         # Royal Center Card
-        card = pygame.Rect(0, 0, int(520 * s), int(470 * s))
+        card = pygame.Rect(0, 0, int(540 * s), int(530 * s))
         card.center = (w // 2, h // 2)
         draw_pixel_panel(surface, card, bg_color=pal.UI_BG_DARK, border_color=pal.UI_BORDER_GOLD)
 
         # Title Header Banner
-        banner = pygame.Rect(0, 0, int(460 * s), int(78 * s))
+        banner = pygame.Rect(0, 0, int(480 * s), int(76 * s))
         banner.centerx = card.centerx
-        banner.top = card.top + int(24 * s)
+        banner.top = card.top + int(22 * s)
         draw_pixel_panel(surface, banner, bg_color=pal.ROYAL_BLUE_DARK, border_color=pal.GOLD_SHINE)
         draw_text_shadow(
             surface,
             game.font_big,
             "TOWER DEFENSE II",
             pal.GOLD_SHINE,
-            pos=(banner.centerx, banner.top + int(28 * s)),
+            pos=(banner.centerx, banner.top + int(27 * s)),
         )
         draw_text_shadow(
             surface,
@@ -61,15 +61,20 @@ class MenuSystem:
             pos=(banner.centerx, banner.bottom - int(18 * s)),
         )
 
-        # Showcase the 4 procedural pixel tower turrets below banner
+        # Showcase the 4 procedural pixel tower turrets + Royal Paladin Hero
         showcase_y = banner.bottom + int(32 * s)
         t_keys = ["archer", "artillery", "frost", "lightning"]
+        anim_tick = (pygame.time.get_ticks() // 220) % 4
         for i, tk in enumerate(t_keys):
-            tx = card.centerx + int((i - 1.5) * 95 * s)
+            tx = card.centerx + int((i - 2.0) * 86 * s)
             base_srf = game.pixel_gen.get_tower_base(tk, 3)
-            tur_srf = game.pixel_gen.get_tower_turret(tk, 3, -45.0, (pygame.time.get_ticks() // 250) % 4)
+            tur_srf = game.pixel_gen.get_tower_turret(tk, 3, -45.0, anim_tick)
             surface.blit(base_srf, base_srf.get_rect(center=(tx, showcase_y + int(4 * s))))
             surface.blit(tur_srf, tur_srf.get_rect(center=(tx, showcase_y - int(10 * s))))
+
+        hero_tx = card.centerx + int(2.0 * 86 * s)
+        hero_srf = game.pixel_gen.get_hero_sprite(walk_frame=anim_tick, attack_frame=0, level=5)
+        surface.blit(hero_srf, hero_srf.get_rect(center=(hero_tx, showcase_y - int(2 * s))))
 
         # Best Score & Wave Record
         best_wave = game.settings.get("best_wave", 1)
@@ -79,13 +84,13 @@ class MenuSystem:
             game.font_small,
             f"High Score: {high_score}   |   Best Wave: {best_wave}",
             pal.GOLD_LIGHT,
-            pos=(card.centerx, showcase_y + int(48 * s)),
+            pos=(card.centerx, showcase_y + int(46 * s)),
         )
 
         # Menu Buttons
-        btn_w, btn_h = int(310 * s), int(44 * s)
-        y0 = showcase_y + int(82 * s)
-        gap = int(54 * s)
+        btn_w, btn_h = int(340 * s), int(42 * s)
+        y0 = showcase_y + int(80 * s)
+        gap = int(50 * s)
 
         play_r = pygame.Rect(0, 0, btn_w, btn_h)
         play_r.center = (card.centerx, y0)
@@ -99,10 +104,24 @@ class MenuSystem:
             accent_color=pal.ARCHER_GREEN_DARK,
         )
 
+        biome_key = game.settings.get("biome", "grasslands")
+        biome_cfg = BIOME_DEFINITIONS.get(biome_key, BIOME_DEFINITIONS["grasslands"])
+        biome_r = pygame.Rect(0, 0, btn_w, btn_h)
+        biome_r.center = (card.centerx, y0 + gap)
+        self.rects["menu_biome"] = biome_r
+        draw_pixel_button(
+            surface,
+            biome_r,
+            f"BIOME: {biome_cfg['name'].upper()}",
+            game.font_small,
+            hovered=biome_r.collidepoint(mx, my),
+            accent_color=pal.UI_BG_MID,
+        )
+
         diff_key = game.settings.get("difficulty", "normal")
         diff_label = DIFFICULTY_PROFILES.get(diff_key, DIFFICULTY_PROFILES["normal"])["label"]
         diff_r = pygame.Rect(0, 0, btn_w, btn_h)
-        diff_r.center = (card.centerx, y0 + gap)
+        diff_r.center = (card.centerx, y0 + gap * 2)
         self.rects["menu_difficulty"] = diff_r
         draw_pixel_button(
             surface,
@@ -113,7 +132,7 @@ class MenuSystem:
         )
 
         set_r = pygame.Rect(0, 0, btn_w, btn_h)
-        set_r.center = (card.centerx, y0 + gap * 2)
+        set_r.center = (card.centerx, y0 + gap * 3)
         self.rects["menu_settings"] = set_r
         draw_pixel_button(
             surface,
@@ -124,7 +143,7 @@ class MenuSystem:
         )
 
         quit_r = pygame.Rect(0, 0, btn_w, btn_h)
-        quit_r.center = (card.centerx, y0 + gap * 3)
+        quit_r.center = (card.centerx, y0 + gap * 4)
         self.rects["menu_quit"] = quit_r
         draw_pixel_button(
             surface,
@@ -140,6 +159,14 @@ class MenuSystem:
             game.ev_manager.post(Event(EVENT_UI_CLICK))
             game.reset_battle()
             game.change_state("playing")
+        elif self.rects.get("menu_biome") and self.rects["menu_biome"].collidepoint(pos):
+            game.ev_manager.post(Event(EVENT_UI_CLICK))
+            order = list(BIOME_DEFINITIONS.keys())
+            cur = game.settings.get("biome", "grasslands")
+            nxt = order[(order.index(cur) + 1) % len(order)] if cur in order else "grasslands"
+            game.settings["biome"] = nxt
+            game.rebake_biome_map()
+            game.persist_settings()
         elif self.rects.get("menu_difficulty") and self.rects["menu_difficulty"].collidepoint(pos):
             game.ev_manager.post(Event(EVENT_UI_CLICK))
             order = ["easy", "normal", "hard"]
@@ -187,14 +214,12 @@ class MenuSystem:
         btn_w = int(340 * s)
         btn_h = int(42 * s)
 
-        # 1. Sound Toggle
         snd_r = pygame.Rect(0, 0, btn_w, btn_h)
         snd_r.center = (card.centerx, row_y)
         self.rects["set_sound_toggle"] = snd_r
         snd_txt = f"AUDIO: {'ON' if game.sound_enabled else 'OFF'}"
         draw_pixel_button(surface, snd_r, snd_txt, game.font_mid, hovered=snd_r.collidepoint(mx, my))
 
-        # 2. SFX Volume Slider Bar
         sfx_r = pygame.Rect(0, 0, btn_w, int(34 * s))
         sfx_r.center = (card.centerx, row_y + row_gap)
         self.rects["set_sfx_bar"] = sfx_r
@@ -207,7 +232,6 @@ class MenuSystem:
             font=game.font_small,
         )
 
-        # 3. Music Volume Slider Bar
         mus_r = pygame.Rect(0, 0, btn_w, int(34 * s))
         mus_r.center = (card.centerx, row_y + row_gap * 2)
         self.rects["set_music_bar"] = mus_r
@@ -220,7 +244,6 @@ class MenuSystem:
             font=game.font_small,
         )
 
-        # Handle live drag on SFX or Music bars
         if pygame.mouse.get_pressed()[0]:
             if sfx_r.collidepoint(mx, my):
                 v = max(0.0, min(1.0, (mx - sfx_r.left) / float(sfx_r.width)))
@@ -233,14 +256,12 @@ class MenuSystem:
                 game.settings["music_volume"] = v
                 game.ev_manager.post(Event(EVENT_MUSIC_VOLUME_CHANGED, data={"volume": v}))
 
-        # 4. Fullscreen Toggle
         fs_r = pygame.Rect(0, 0, btn_w, btn_h)
         fs_r.center = (card.centerx, row_y + row_gap * 3)
         self.rects["set_fullscreen"] = fs_r
         fs_txt = f"FULLSCREEN: {'ON' if game.fullscreen else 'OFF'}"
         draw_pixel_button(surface, fs_r, fs_txt, game.font_mid, hovered=fs_r.collidepoint(mx, my))
 
-        # 5. Show FPS Toggle
         fps_r = pygame.Rect(0, 0, btn_w, btn_h)
         fps_r.center = (card.centerx, row_y + row_gap * 4)
         self.rects["set_fps"] = fps_r
@@ -253,7 +274,6 @@ class MenuSystem:
             hovered=fps_r.collidepoint(mx, my),
         )
 
-        # 6. Back Button
         back_r = pygame.Rect(0, 0, int(220 * s), int(44 * s))
         back_r.center = (card.centerx, card.bottom - int(38 * s))
         self.rects["set_back"] = back_r

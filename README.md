@@ -1,7 +1,7 @@
 # Tower Defense II — Royal Guard (Tactical Pixel-Art Edition)
 
 ## Overview
-**Tower Defense II: Royal Guard** is a modular 2D fantasy tower defense game built in **Python** and **Pygame**. Inspired by tactical slot-based defense games like *Kingdom Rush*, it features a custom **Procedural Pixel-Art & Terrain Baking Engine** (`graphics/pixel_gen.py`, `graphics/map_baker.py`) paired with a **Real-Time 2D Dynamic Lighting & Additive Bloom Pipeline** (`graphics/lighting.py`) and a **Living World & Persistent Battlefield Decal System** (`systems/world_fx.py`)—all rendered in code without relying on external static sprite sheets.
+**Tower Defense II: Royal Guard** is a modular 2D fantasy tower defense game built in **Python** and **Pygame**. Inspired by tactical slot-based defense games like *Kingdom Rush*, it features a custom **Procedural Pixel-Art & Terrain Baking Engine** (`graphics/pixel_gen.py`, `graphics/map_baker.py`) paired with a **Real-Time 2D Dynamic Lighting & Additive Bloom Pipeline** (`graphics/lighting.py`), a **Living World & Persistent Battlefield Decal System** (`systems/world_fx.py`), a **Controllable Royal Paladin Hero Unit** (`gameplay/hero.py`), and **3 Distinct Procedural Fantasy Biomes**—all rendered in code without relying on external static sprite sheets.
 
 > **Note:** The original v1 prototype is preserved in the [`legacy_v1/`](./legacy_v1) directory for historical reference.
 
@@ -10,13 +10,23 @@
 ## Key Features & Architecture
 - **Procedural Pixel-Art Engine (`graphics/`):**
   - Generates multi-layered sprites on low-resolution virtual canvases with automatic 1px dark contour generation (`apply_pixel_outline`), directional shading, and crisp nearest-neighbor scaling.
-  - Bakes a complete fantasy battleground (`bake_pixel_map`) featuring a Catmull-Rom spline cobblestone road, azure river, stone bridge, forest groves, and the Royal Castle.
+  - Bakes complete procedural fantasy battlegrounds (`bake_pixel_map`) across 3 distinct biomes with Catmull-Rom spline cobblestone paths, winding water/lava channels, bridges, foliage, and the Royal Castle.
+- **3 Procedural Biomes (`core/config.py`, `graphics/map_baker.py`):**
+  1. **Emerald Grasslands:** Lush royal meadows with an azure river, oak groves, and floating forest leaves.
+  2. **Frozen Tundra:** Snow-dusted northern pass with a glacial blue stream, snow-capped pines, and blizzard flurries.
+  3. **Volcanic Ashlands:** Scorched obsidian crags split by a glowing molten lava river, burning ember trees, and rising ash particles.
+- **Controllable Hero Unit — Sir Roland the Royal Paladin (`gameplay/hero.py`):**
+  - Real-time command via **Right Click** or **`[H]`** to reposition anywhere across the battlefield.
+  - Intercepts and blocks marching enemies in close melee combat with cleaving sword strikes that damage surrounding foes.
+  - Persistent leveling system (Levels 1 to 5) that boosts Max HP and attack damage through combat XP.
+  - **`[E]` Holy Judgment Skill:** Slams the ground with a consecrated golden sigil, healing the hero, dealing heavy AoE magic damage, and slowing all caught enemies.
+  - Automatic respawn timer if knocked out in battle.
 - **Real-Time 2D Dynamic Lighting & Bloom (`graphics/lighting.py`):**
   - Smooth Day -> Sunset -> Night progression across campaign waves (or manual mode cycling via **`[L]`**).
-  - Multiplicative ambient lightmap (`BLEND_RGB_MULT`) combined with an additive HDR-style bloom pass (`BLEND_RGB_ADD`) for glowing Frost/Arcane spires, castle torches, enemy spawn portal, Boss Golem magma core, projectiles, chain lightning arcs, and falling meteors.
+  - Multiplicative ambient lightmap (`BLEND_RGB_MULT`) combined with an additive HDR-style bloom pass (`BLEND_RGB_ADD`) for glowing Frost/Arcane spires, hero holy aura, castle torches, enemy spawn portal, Boss Golem magma core, molten lava river, projectiles, and falling meteors.
 - **Living World & Persistent Battlefield Decals (`systems/world_fx.py`):**
-  - Persistent fading ground decals: artillery/meteor scorch craters, frost spire ice patches, and combat splats.
-  - Animated river current foam ripples, wind-blown forest canopy leaves, and glowing night fireflies.
+  - Persistent fading ground decals: artillery/meteor scorch craters, frost spire ice patches, holy judgment sigils, and combat splats.
+  - Animated river/lava current foam ripples, wind-blown biome foliage/embers, and glowing night fireflies.
 - **Software Design Patterns:**
   - **Observer / Event Bus (`core/events.py`):** Decouples gameplay events, audio playback, and UI state transitions via `EventManager`.
   - **Strategy Pattern (`gameplay/strategy.py`):** Per-tower selectable targeting priorities (`First`, `Strongest`, `Weakest`, `Nearest`).
@@ -36,15 +46,15 @@
 
 ## Project Structure
 ```text
-├── core/               # Event bus, logging, and balance/settings configuration
-├── graphics/           # Procedural pixel-art generator, map baker, 2D lighting/bloom, UI kit
-├── gameplay/           # Spline pathing, towers, enemies, pooled projectiles, and waves
-├── systems/            # Pixel particles, persistent ground decals/ambient FX, and audio
-├── ui/                 # Tactical radial menu, HUD, and menu/overlay screens
+├── core/               # Event bus, logging, biome definitions, and balance/settings configuration
+├── graphics/           # Procedural pixel-art generator, multi-biome map baker, 2D lighting/bloom, UI kit
+├── gameplay/           # Hero unit, spline pathing, towers, enemies, pooled projectiles, and waves
+├── systems/            # Pixel particles, persistent ground decals, biome ambient FX, and audio
+├── ui/                 # Tactical radial menu, HUD with hero status card, and menu/overlay screens
 ├── assets/             # Audio tracks (.wav) and pixel font
 ├── legacy_v1/          # Archived v1.0 prototype
 ├── game.py             # Main game engine and primary loop
-└── settings.json       # Persistent user configuration and high score records
+└── settings.json       # Persistent user configuration, high scores, and selected biome
 ```
 
 ---
@@ -69,7 +79,10 @@ py game.py
 | Input / Key | Action |
 | :--- | :--- |
 | **Left Click** | Select tactical build slots, interact with Radial Menu & HUD buttons |
-| **Right Click / `ESC`** | Close active Radial Menu / Toggle Pause Menu |
+| **Right Click** | Close active Radial Menu / Command Hero to rally and intercept at mouse position |
+| **`ESC`** | Close Radial Menu / Toggle Pause Menu |
+| **`H`** | Rally Hero to current mouse cursor position |
+| **`E`** | Cast Hero Active Skill (**Holy Judgment**) |
 | **`1` / `2` / `3` / `4`** | Build Archer / Artillery / Frost / Arcane tower on selected empty slot |
 | **`U`** | Upgrade selected tower to next tier (Lv.2 / Lv.3) |
 | **`T`** | Cycle selected tower's targeting strategy (`First` / `Strongest` / `Weakest` / `Nearest`) |

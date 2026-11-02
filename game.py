@@ -44,6 +44,7 @@ from graphics.lighting import LightingEngine
 from graphics.ui_kit import draw_text_shadow
 from gameplay.path import RoadPath, BuildSlot
 from gameplay.enemies import Enemy
+from gameplay.hero import HeroUnit
 from gameplay.towers import Tower
 from gameplay.projectiles import Projectile, ProjectilePool, LightningBoltVisual
 from gameplay.waves import WaveManager
@@ -95,13 +96,16 @@ class TowerDefenseGame:
         self.road = RoadPath(self.width, self.height)
         self.map_surface: Optional[pygame.Surface] = None
         self.lighting = LightingEngine(self.width, self.height)
-        self.world_fx = WorldEffectsSystem(self.width, self.height)
+        self.world_fx = WorldEffectsSystem(self.width, self.height, biome=self.settings.get("biome", "grasslands"))
         self.wave_mgr = WaveManager()
         self.proj_pool = ProjectilePool()
         self.particles = ParticleSystem()
         self.radial_menu = RadialMenu()
         self.hud = GameHUD()
         self.menus = MenuSystem()
+
+        hx, hy, _ = self.road.get_point_at_distance(self.road.total_length * 0.62)
+        self.hero = HeroUnit((hx, hy))
 
         self.enemies: List[Enemy] = []
         self.projectiles: List[Projectile] = []
@@ -147,6 +151,17 @@ class TowerDefenseGame:
             self.font_mid = pygame.font.SysFont(None, s_mid)
             self.font_big = pygame.font.SysFont(None, s_big)
 
+    def rebake_biome_map(self) -> None:
+        biome = str(self.settings.get("biome", "grasslands"))
+        self.world_fx.set_biome(biome)
+        self.map_surface = bake_pixel_map(
+            self.width,
+            self.height,
+            self.road,
+            pixel_scale=max(3, int(round(PIXEL_SCALE * self.ui_scale))),
+            biome=biome,
+        )
+
     def apply_display_mode(self) -> None:
         if self.fullscreen:
             info = pygame.display.Info()
@@ -165,12 +180,7 @@ class TowerDefenseGame:
         self.road.rebuild(self.width, self.height)
         self.lighting.resize(self.width, self.height)
         self.world_fx.resize(self.width, self.height)
-        self.map_surface = bake_pixel_map(
-            self.width,
-            self.height,
-            self.road,
-            pixel_scale=max(3, int(round(PIXEL_SCALE * self.ui_scale))),
-        )
+        self.rebake_biome_map()
 
     def persist_settings(self) -> None:
         save_settings(self.base_dir, self.settings)
@@ -196,6 +206,9 @@ class TowerDefenseGame:
         for sl in self.road.slots:
             sl.tower = None
 
+        hx, hy, _ = self.road.get_point_at_distance(self.road.total_length * 0.62)
+        self.hero.reset((hx, hy))
+
         self.wave_mgr.reset()
         self.coins = int(prof["starting_gold"])
         self.score = 0
@@ -204,7 +217,7 @@ class TowerDefenseGame:
         self.game_speed = 1.0
         self.endless_mode = False
         self.spell_cooldowns = {"meteor": 0.0, "blizzard": 0.0}
-        self.banner_text = "BUILD YOUR TOWERS AND PREPARE YOUR DEFENSES!"
+        self.banner_text = "BUILD YOUR TOWERS AND COMMAND SIR ROLAND!"
         self.banner_timer_ms = 3200.0
 
     # ------------------------------------------------------------------
@@ -236,6 +249,18 @@ class TowerDefenseGame:
             elif ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 3:
                 if self.radial_menu.is_open:
                     self.radial_menu.close()
+                elif self.state == "playing":
+                    self._command_hero_move(ev.pos)
+
+    def _command_hero_move(self, pos: Tuple[int, int]) -> None:
+        s = self.ui_scale
+        # Clamp inside playable battlefield area (avoid top HUD & bottom spell bar)
+        rx = max(int(36 * s), min(self.width - int(36 * s), pos[0]))
+        ry = max(int(72 * s), min(self.height - int(78 * s), pos[1]))
+        self.hero.set_rally_point((rx, ry))
+        self.ev_manager.post(Event(EVENT_UI_CLICK))
+        self.particles.spawn_build_sparkles((rx, ry), pal.GOLD_SHINE)
+        self.particles.add_floating_text((rx, ry - int(14 * s)), "Hero Rally!", pal.GOLD_SHINE)
 
     def _handle_keydown(self, key: int) -> None:
         if key == pygame.K_ESCAPE:
@@ -272,6 +297,12 @@ class TowerDefenseGame:
         elif key == pygame.K_n:
             if self.wave_mgr.state == "prep":
                 self._call_wave_now()
+        # Move Hero to mouse cursor [H]
+        elif key == pygame.K_h:
+            self._command_hero_move(pygame.mouse.get_pos())
+        # Hero Active Skill: Holy Judgment [E]
+        elif key == pygame.K_e:
+            self.hero.cast_holy_judgment(self)
         # Active Spells [Q] and [W]
         elif key == pygame.K_q:
             self.cast_spell("meteor")
@@ -338,6 +369,9 @@ class TowerDefenseGame:
         if self.hud.blizzard_btn_rect.collidepoint(pos):
             self.cast_spell("blizzard")
             return
+        if self.hud.hero_skill_btn_rect.collidepoint(pos):
+            self.hero.cast_holy_judgment(self)
+            return
 
         # 2. Check open Radial Menu nodes
         if self.radial_menu.is_open and self.radial_menu.active_slot is not None:
@@ -354,7 +388,6 @@ class TowerDefenseGame:
                         elif node_key == "sell":
                             self._sell_tower(slot)
                     return
-            # Clicked outside radial nodes -> close radial menu
             self.radial_menu.close()
 
         # 3. Check Tactical Build Slots on the map
@@ -503,10 +536,11 @@ class TowerDefenseGame:
         self._update_waves(dt_ms)
         self._update_meteors(dt_ms)
 
-        # Update Towers
+        # Update Towers & Controllable Hero
         for sl in self.road.slots:
             if sl.tower is not None:
                 sl.tower.update(dt_ms, self)
+        self.hero.update(dt_ms, self)
 
         # Update Projectiles
         self._update_projectiles(dt_ms)
@@ -563,11 +597,11 @@ class TowerDefenseGame:
                     wm.state = "combat"
         elif wm.state == "combat":
             if not any(e.alive for e in self.enemies):
-                # Wave Cleared!
                 cfg = wm.get_wave_config(wm.current_wave)
                 bonus = int(cfg.get("clear_bonus", 40))
                 self.coins += bonus
                 self.score += bonus * 3
+                self.hero.gain_xp(25, self)
                 self._record_high_score()
                 self.ev_manager.post(Event(EVENT_WAVE_CLEARED, data={"wave": wm.current_wave}))
 
@@ -701,6 +735,7 @@ class TowerDefenseGame:
         self.coins += enemy.reward
         pts = enemy.reward * (10 if enemy.boss else 5)
         self.score += pts
+        self.hero.gain_xp(24 if enemy.boss else 7, self)
         self._record_high_score()
         self.world_fx.add_combat_splat(enemy.pos)
         self.particles.spawn_hit(enemy.pos, pal.GOLD_LIGHT if enemy.boss else pal.CRIMSON_LIGHT, count=14 if enemy.boss else 9)
@@ -802,40 +837,32 @@ class TowerDefenseGame:
         castle_srf = self.pixel_gen.get_castle_sprite(self.castle_hp / max(1.0, self.castle_hp_max))
         self.screen.blit(castle_srf, castle_srf.get_rect(center=(cx, cy)))
 
-        # 4. Enemies (depth-sorted by Y position)
+        # 4. Hero Rally Ring Indicator (when commanded or marching)
+        if self.hero.rally_indicator_ms > 0.0 or self.hero.marching_to_rally:
+            rx_i = int(self.hero.rally_x + ox)
+            ry_i = int(self.hero.rally_y + oy)
+            pygame.draw.ellipse(
+                self.screen,
+                pal.GOLD_SHINE,
+                (rx_i - int(16 * s), ry_i - int(8 * s), int(32 * s), int(16 * s)),
+                2,
+            )
+
+        # 5. Enemies (depth-sorted by Y position) + Controllable Hero Unit
         sorted_enemies = sorted(self.enemies, key=lambda e: e.y)
+        hero_drawn = False
         for e in sorted_enemies:
             if not e.alive:
                 continue
-            ex, ey = int(e.x + ox), int(e.y + oy)
-            sh_w = int((36 if e.boss else 20) * s)
-            sh_h = int((14 if e.boss else 8) * s)
-            sh = pygame.Surface((sh_w, sh_h), pygame.SRCALPHA)
-            pygame.draw.ellipse(sh, pal.SHADOW_ALPHA, (0, 0, sh_w, sh_h))
-            self.screen.blit(sh, (ex - sh_w // 2, ey + int(10 * s)))
+            if not hero_drawn and self.hero.y <= e.y:
+                self._draw_hero_unit(ox, oy, s)
+                hero_drawn = True
+            self._draw_enemy_unit(e, ox, oy, s)
 
-            spr = self.pixel_gen.get_enemy_sprite(
-                e.enemy_type,
-                walk_frame=e.walk_frame,
-                hit_flash=(e.hit_flash_ms > 0),
-                slowed=(e.slow_timer_ms > 0),
-                facing_left=e.facing_left,
-            )
-            self.screen.blit(spr, spr.get_rect(center=(ex, ey - int(6 * s))))
+        if not hero_drawn:
+            self._draw_hero_unit(ox, oy, s)
 
-            # Overhead Pixel HP Bar
-            bw = int((46 if e.boss else 28) * s)
-            bh = int((7 if e.boss else 5) * s)
-            bx = ex - bw // 2
-            by = ey - spr.get_height() // 2 - int(10 * s)
-            pygame.draw.rect(self.screen, pal.OUTLINE_DARK, (bx - 1, by - 1, bw + 2, bh + 2))
-            pygame.draw.rect(self.screen, (60, 20, 25), (bx, by, bw, bh))
-            fill_w = int(bw * max(0.0, min(1.0, e.hp / max(1.0, e.hp_max))))
-            bar_col = pal.UI_CYAN if e.slow_timer_ms > 0 else (pal.UI_RED if e.boss else pal.UI_GREEN)
-            if fill_w > 0:
-                pygame.draw.rect(self.screen, bar_col, (bx, by, fill_w, bh))
-
-        # 5. Projectiles & Chain Lightning Arcs & Falling Meteors
+        # 6. Projectiles & Chain Lightning Arcs & Falling Meteors
         for proj in self.projectiles:
             if not proj.active:
                 continue
@@ -865,14 +892,14 @@ class TowerDefenseGame:
                 msrf = self.pixel_gen.get_projectile_sprite("meteor", 0.0)
                 self.screen.blit(msrf, msrf.get_rect(center=(mx_p, my_p)))
 
-        # 6. Particles, Floating Combat Text & Canopy Leaves / Fireflies
+        # 7. Particles, Floating Combat Text & Canopy Leaves / Fireflies
         self.particles.draw(self.screen, self.camera_offset, self.font_small, self.font_mid)
         self.world_fx.draw_canopy_layer(self.screen, self.camera_offset)
 
-        # 7. Real-Time 2D Dynamic Lighting & Additive Bloom Pass
+        # 8. Real-Time 2D Dynamic Lighting & Additive Bloom Pass
         self.lighting.render_lighting(self.screen, self, self.world_fx)
 
-        # 8. Wave / Spell Announcement Banner
+        # 9. Wave / Spell Announcement Banner
         if self.banner_timer_ms > 0.0 and self.banner_text:
             draw_text_shadow(
                 self.screen,
@@ -883,10 +910,76 @@ class TowerDefenseGame:
                 align="center",
             )
 
-        # 9. Radial Menu & HUD & Overlays (Rendered crisp on top of lighting)
+        # 10. Radial Menu & HUD & Overlays (Rendered crisp on top of lighting)
         self.radial_menu.draw(self.screen, self)
         self.hud.draw(self.screen, self)
         self.menus.draw_overlay(self.screen, self)
+
+    def _draw_enemy_unit(self, e: Enemy, ox: int, oy: int, s: float) -> None:
+        ex, ey = int(e.x + ox), int(e.y + oy)
+        sh_w = int((36 if e.boss else 20) * s)
+        sh_h = int((14 if e.boss else 8) * s)
+        sh = pygame.Surface((sh_w, sh_h), pygame.SRCALPHA)
+        pygame.draw.ellipse(sh, pal.SHADOW_ALPHA, (0, 0, sh_w, sh_h))
+        self.screen.blit(sh, (ex - sh_w // 2, ey + int(10 * s)))
+
+        spr = self.pixel_gen.get_enemy_sprite(
+            e.enemy_type,
+            walk_frame=e.walk_frame,
+            hit_flash=(e.hit_flash_ms > 0),
+            slowed=(e.slow_timer_ms > 0),
+            facing_left=e.facing_left,
+        )
+        self.screen.blit(spr, spr.get_rect(center=(ex, ey - int(6 * s))))
+
+        bw = int((46 if e.boss else 28) * s)
+        bh = int((7 if e.boss else 5) * s)
+        bx = ex - bw // 2
+        by = ey - spr.get_height() // 2 - int(10 * s)
+        pygame.draw.rect(self.screen, pal.OUTLINE_DARK, (bx - 1, by - 1, bw + 2, bh + 2))
+        pygame.draw.rect(self.screen, (60, 20, 25), (bx, by, bw, bh))
+        fill_w = int(bw * max(0.0, min(1.0, e.hp / max(1.0, e.hp_max))))
+        bar_col = pal.UI_CYAN if e.slow_timer_ms > 0 else (pal.UI_RED if e.boss else pal.UI_GREEN)
+        if fill_w > 0:
+            pygame.draw.rect(self.screen, bar_col, (bx, by, fill_w, bh))
+
+    def _draw_hero_unit(self, ox: int, oy: int, s: float) -> None:
+        hx = int(self.hero.x + ox)
+        hy = int(self.hero.y + oy)
+        if not self.hero.alive:
+            # Draw golden recovery banner marker at rally point
+            pygame.draw.ellipse(
+                self.screen,
+                pal.GOLD_MID,
+                (hx - int(14 * s), hy - int(6 * s), int(28 * s), int(12 * s)),
+                2,
+            )
+            return
+
+        # Golden Paladin Aura ring on ground
+        sh = pygame.Surface((int(30 * s), int(12 * s)), pygame.SRCALPHA)
+        pygame.draw.ellipse(sh, (250, 210, 80, 95), (0, 0, int(30 * s), int(12 * s)))
+        self.screen.blit(sh, (hx - int(15 * s), hy + int(10 * s)))
+
+        spr = self.pixel_gen.get_hero_sprite(
+            walk_frame=self.hero.walk_frame,
+            attack_frame=self.hero.attack_frame,
+            hit_flash=(self.hero.hit_flash_ms > 0),
+            facing_left=self.hero.facing_left,
+            level=self.hero.level,
+        )
+        self.screen.blit(spr, spr.get_rect(center=(hx, hy - int(8 * s))))
+
+        # Overhead Golden Hero HP Bar + Level Badge
+        bw = int(36 * s)
+        bh = int(6 * s)
+        bx = hx - bw // 2
+        by = hy - spr.get_height() // 2 - int(12 * s)
+        pygame.draw.rect(self.screen, pal.OUTLINE_DARK, (bx - 1, by - 1, bw + 2, bh + 2))
+        pygame.draw.rect(self.screen, (35, 30, 50), (bx, by, bw, bh))
+        fill_w = int(bw * max(0.0, min(1.0, self.hero.hp / max(1.0, self.hero.hp_max))))
+        if fill_w > 0:
+            pygame.draw.rect(self.screen, pal.GOLD_SHINE, (bx, by, fill_w, bh))
 
     def run(self) -> None:
         while self.running:

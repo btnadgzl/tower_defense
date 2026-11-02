@@ -1,6 +1,6 @@
 from __future__ import annotations
 import math
-from typing import Dict, List, Tuple, Any
+from typing import Dict, Tuple, Any
 import pygame
 
 
@@ -27,7 +27,6 @@ class LightingEngine:
         "night": "Night",
     }
 
-    # Ambient light colors for multiplicative pass (255,255,255 = full brightness)
     AMBIENT_DAY: Color = (255, 252, 245)
     AMBIENT_DUSK: Color = (205, 148, 165)
     AMBIENT_NIGHT: Color = (68, 78, 132)
@@ -46,7 +45,7 @@ class LightingEngine:
         self.mode_index: int = 0
         self.time_sec: float = 0.0
         self.current_ambient: Color = self.AMBIENT_DAY
-        self.darkness_factor: float = 0.0  # 0.0 = bright day, 1.0 = full night
+        self.darkness_factor: float = 0.0
 
     @property
     def mode(self) -> str:
@@ -71,7 +70,6 @@ class LightingEngine:
 
     def _get_brush(self, radius_lowres: int, color: Color) -> pygame.Surface:
         r = max(4, min(160, int(radius_lowres)))
-        # Quantize color slightly to keep brush cache small and fast
         q_col: Color = (
             min(255, (color[0] // 8) * 8),
             min(255, (color[1] // 8) * 8),
@@ -87,54 +85,51 @@ class LightingEngine:
         steps = max(8, min(22, r))
         for i in range(steps, 0, -1):
             p = i / float(steps)
-            # Smooth quadratic falloff from center to edge
             intensity = (1.0 - p) ** 1.65
-            cr = int(q_col[0] * intensity)
-            cg = int(q_col[1] * intensity)
-            cb = int(q_col[2] * intensity)
-            pygame.draw.circle(surf, (cr, cg, cb), (r, r), int(r * p))
+            col = (
+                int(q_col[0] * intensity),
+                int(q_col[1] * intensity),
+                int(q_col[2] * intensity),
+            )
+            pygame.draw.circle(surf, col, (r, r), max(1, int(r * p)))
 
         self._brush_cache[key] = surf
         return surf
 
-    def update(self, dt_ms: float, current_wave: int) -> None:
+    def update(self, dt_ms: float, current_wave: int = 1) -> None:
         self.time_sec += dt_ms / 1000.0
+        target_ambient = self.AMBIENT_DAY
+        target_dark = 0.0
+
         m = self.mode
-
-        target_amb = self.AMBIENT_DAY
-        target_dark = 0.05
-
         if m == "day":
-            target_amb = self.AMBIENT_DAY
-            target_dark = 0.05
+            target_ambient = self.AMBIENT_DAY
+            target_dark = 0.0
         elif m == "dusk":
-            target_amb = self.AMBIENT_DUSK
-            target_dark = 0.55
+            target_ambient = self.AMBIENT_DUSK
+            target_dark = 0.45
         elif m == "night":
-            target_amb = self.AMBIENT_NIGHT
-            target_dark = 1.0
+            target_ambient = self.AMBIENT_NIGHT
+            target_dark = 0.90
         else:
-            # Auto cycle based on wave progression + gentle time breathing
-            w_mod = (max(1, current_wave) - 1) % 6
-            if w_mod in (0, 1):
-                # Waves 1-2: Daylight -> Late Afternoon
-                target_amb = _lerp_color(self.AMBIENT_DAY, self.AMBIENT_DUSK, 0.25 * w_mod)
-                target_dark = 0.08 + 0.15 * w_mod
-            elif w_mod == 2:
-                # Wave 3: Sunset Dusk
-                target_amb = self.AMBIENT_DUSK
-                target_dark = 0.58
-            elif w_mod in (3, 4):
-                # Waves 4-5 (Boss wave!): Starlit Night
-                target_amb = self.AMBIENT_NIGHT
-                target_dark = 0.95
+            w = max(1, current_wave)
+            if w <= 2:
+                target_ambient = self.AMBIENT_DAY
+                target_dark = 0.0
+            elif w <= 5:
+                t = (w - 2) / 3.0
+                target_ambient = _lerp_color(self.AMBIENT_DAY, self.AMBIENT_DUSK, t)
+                target_dark = 0.45 * t
+            elif w <= 9:
+                t = (w - 5) / 4.0
+                target_ambient = _lerp_color(self.AMBIENT_DUSK, self.AMBIENT_NIGHT, t)
+                target_dark = 0.45 + 0.45 * t
             else:
-                # Wave 6: Dawn transition
-                target_amb = _lerp_color(self.AMBIENT_NIGHT, self.AMBIENT_DUSK, 0.65)
-                target_dark = 0.45
+                target_ambient = (56, 62, 118)
+                target_dark = 0.95
 
-        lerp_spd = min(1.0, (dt_ms / 1000.0) * 2.5)
-        self.current_ambient = _lerp_color(self.current_ambient, target_amb, lerp_spd)
+        lerp_spd = min(1.0, (dt_ms / 1000.0) * 3.5)
+        self.current_ambient = _lerp_color(self.current_ambient, target_ambient, lerp_spd)
         self.darkness_factor += (target_dark - self.darkness_factor) * lerp_spd
 
     def render_lighting(
@@ -143,7 +138,7 @@ class LightingEngine:
         game_scene: Any,
         world_fx: Any = None,
     ) -> None:
-        """Collects all active scene lights and composites multiplicative lightmap + additive bloom."""
+        """Collects all active light sources in the scene and composites lightmap + bloom."""
         ox, oy = game_scene.camera_offset
         s = game_scene.ui_scale
         div = float(self.scale_div)
@@ -151,8 +146,8 @@ class LightingEngine:
         self.lightmap.fill(self.current_ambient)
         self.bloom_map.fill((0, 0, 0))
 
-        pulse = 0.92 + 0.08 * math.sin(self.time_sec * 5.5)
-        flicker = 0.94 + 0.06 * math.sin(self.time_sec * 17.0)
+        pulse = 0.92 + 0.08 * math.sin(self.time_sec * 4.2)
+        flicker = 0.94 + 0.06 * math.sin(self.time_sec * 11.5)
 
         def add_light(
             wx: float,
@@ -175,7 +170,19 @@ class LightingEngine:
                     int(color[2] * bloom_intensity),
                 )
                 b_brush = self._get_brush(max(4, int(lr * 0.78)), b_col)
-                self.bloom_map.blit(b_brush, (lx - b_brush.get_width() // 2, ly - b_brush.get_height() // 2), special_flags=pygame.BLEND_RGB_ADD)
+                self.bloom_map.blit(
+                    b_brush,
+                    (lx - b_brush.get_width() // 2, ly - b_brush.get_height() // 2),
+                    special_flags=pygame.BLEND_RGB_ADD,
+                )
+
+        # 0. Volcanic Lava River Glow if biome is volcanic_ash
+        biome = game_scene.settings.get("biome", "grasslands")
+        if biome == "volcanic_ash":
+            for yp in (0.15, 0.35, 0.55, 0.88):
+                rx = game_scene.width * (0.475 + 0.025 * math.sin(yp * math.pi * 2.2))
+                ry = game_scene.height * yp
+                add_light(rx, ry, 130.0 * s * pulse, (255, 110, 35), bloom_intensity=0.28)
 
         # 1. Dark Entrance Portal (Left) — Arcane Violet Glow
         add_light(
@@ -214,7 +221,18 @@ class LightingEngine:
                 elif tw.tower_type == "lightning":
                     add_light(sx, sy - 12 * s, 122.0 * s * lvl_mult * pulse, (195, 115, 255), bloom_intensity=0.50)
 
-        # 4. Boss Magma Core & Burning / Slowed Enemies
+        # 4. Royal Paladin Hero Golden Aura
+        hero = getattr(game_scene, "hero", None)
+        if hero is not None and hero.alive:
+            add_light(
+                hero.x,
+                hero.y - 6 * s,
+                (105.0 + hero.level * 10.0) * s * pulse,
+                (255, 220, 120),
+                bloom_intensity=0.42,
+            )
+
+        # 5. Boss Magma Core & Burning Enemies
         for e in game_scene.enemies:
             if not e.alive:
                 continue
@@ -223,7 +241,7 @@ class LightingEngine:
             elif e.burn_timer_ms > 0:
                 add_light(e.x, e.y, 55.0 * s * flicker, (255, 130, 40), bloom_intensity=0.30)
 
-        # 5. Active Projectiles, Chain Lightning Arcs & Falling Meteors
+        # 6. Active Projectiles, Chain Lightning Arcs & Falling Meteors
         for proj in game_scene.projectiles:
             if not proj.active:
                 continue
@@ -251,7 +269,7 @@ class LightingEngine:
             p = sw["ttl"] / max(1.0, sw["max_ttl"])
             add_light(sw["x"], sw["y"], sw["max_r"] * 1.4 * p, sw["color"], bloom_intensity=0.55 * p)
 
-        # 6. Ambient Fireflies (from WorldEffectsSystem)
+        # 7. Ambient Fireflies (from WorldEffectsSystem)
         if world_fx is not None:
             for ff in world_fx.fireflies:
                 glow = 0.5 + 0.5 * math.sin(ff["phase"])
@@ -264,11 +282,9 @@ class LightingEngine:
                         bloom_intensity=0.35 * glow,
                     )
 
-        # Composite Multiplicative Lightmap (when dusk/night or subtle daylight shading)
         if self.darkness_factor > 0.03:
             scaled_light = pygame.transform.smoothscale(self.lightmap, (self.width, self.height))
             target_surface.blit(scaled_light, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
 
-        # Composite Additive Bloom Pass (always active, stronger at dusk/night)
         scaled_bloom = pygame.transform.smoothscale(self.bloom_map, (self.width, self.height))
         target_surface.blit(scaled_bloom, (0, 0), special_flags=pygame.BLEND_RGB_ADD)

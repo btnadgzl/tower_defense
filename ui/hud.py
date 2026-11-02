@@ -1,13 +1,13 @@
 from __future__ import annotations
 from typing import Any, Tuple
 import pygame
-from core.config import SPELLS_CONFIG
+from core.config import SPELLS_CONFIG, HERO_CONFIG
 from graphics import palette as pal
 from graphics.ui_kit import draw_pixel_panel, draw_pixel_button, draw_pixel_bar, draw_text_shadow
 
 
 class GameHUD:
-    """Renders the top kingdom status bar, wave controls, active spell buttons, and Boss HP bar."""
+    """Renders the top kingdom status bar, wave controls, active spell buttons, Hero command bar, and Boss HP bar."""
 
     def __init__(self) -> None:
         self.call_wave_rect = pygame.Rect(0, 0, 10, 10)
@@ -16,6 +16,8 @@ class GameHUD:
         self.pause_btn_rect = pygame.Rect(0, 0, 10, 10)
         self.meteor_btn_rect = pygame.Rect(0, 0, 10, 10)
         self.blizzard_btn_rect = pygame.Rect(0, 0, 10, 10)
+        self.hero_skill_btn_rect = pygame.Rect(0, 0, 10, 10)
+        self.hero_status_rect = pygame.Rect(0, 0, 10, 10)
 
     def draw(self, surface: pygame.Surface, game_scene: Any) -> None:
         s = game_scene.ui_scale
@@ -26,7 +28,6 @@ class GameHUD:
         status_rect = pygame.Rect(int(12 * s), int(10 * s), int(350 * s), int(46 * s))
         draw_pixel_panel(surface, status_rect, bg_color=pal.UI_BG_DARK, border_color=pal.UI_BORDER_GOLD)
 
-        # Heart + Castle HP Bar
         heart_ic = game_scene.pixel_gen.get_icon("heart")
         surface.blit(heart_ic, (status_rect.left + int(12 * s), status_rect.centery - heart_ic.get_height() // 2))
         hp_bar_r = pygame.Rect(
@@ -46,7 +47,6 @@ class GameHUD:
             font=game_scene.font_small,
         )
 
-        # Coin icon + Gold text
         coin_ic = game_scene.pixel_gen.get_icon("coin")
         coin_x = hp_bar_r.right + int(16 * s)
         surface.blit(coin_ic, (coin_x, status_rect.centery - coin_ic.get_height() // 2))
@@ -59,7 +59,6 @@ class GameHUD:
             align="midleft",
         )
 
-        # Score text on right side of status box
         draw_text_shadow(
             surface,
             game_scene.font_small,
@@ -150,9 +149,12 @@ class GameHUD:
             hovered=self.pause_btn_rect.collidepoint(mx, my),
         )
 
-        # 4. Bottom-Left Active Kingdom Spells Bar ([Q] Meteor, [W] Blizzard)
-        self.meteor_btn_rect = pygame.Rect(int(14 * s), h - int(66 * s), int(204 * s), int(52 * s))
-        self.blizzard_btn_rect = pygame.Rect(int(228 * s), h - int(66 * s), int(208 * s), int(52 * s))
+        # 4. Bottom Bar: Active Kingdom Spells ([Q] Meteor, [W] Blizzard) + Hero Skill ([E]) & Hero Status Card
+        self.meteor_btn_rect = pygame.Rect(int(14 * s), h - int(66 * s), int(200 * s), int(52 * s))
+        self.blizzard_btn_rect = pygame.Rect(int(222 * s), h - int(66 * s), int(204 * s), int(52 * s))
+        self.hero_skill_btn_rect = pygame.Rect(int(434 * s), h - int(66 * s), int(210 * s), int(52 * s))
+        self.hero_status_rect = pygame.Rect(int(652 * s), h - int(66 * s), int(306 * s), int(52 * s))
+
         self._draw_spell_button(
             surface,
             game_scene,
@@ -177,6 +179,22 @@ class GameHUD:
             pal.FROST_MID,
             (mx, my),
         )
+
+        hero = getattr(game_scene, "hero", None)
+        if hero is not None:
+            self._draw_spell_button(
+                surface,
+                game_scene,
+                self.hero_skill_btn_rect,
+                "holy_strike",
+                HERO_CONFIG["skill"]["name"],
+                "E",
+                hero.skill_cd_ms if hero.alive else hero.respawn_timer_ms,
+                hero.skill_max_cd_ms if hero.alive else hero.respawn_max_ms,
+                pal.GOLD_MID,
+                (mx, my),
+            )
+            self._draw_hero_status_card(surface, game_scene, hero, self.hero_status_rect)
 
         # 5. Boss Health Bar (if a Boss Golem is alive)
         boss = next((e for e in game_scene.enemies if e.alive and e.boss), None)
@@ -203,6 +221,61 @@ class GameHUD:
                 pal.UI_TEXT_MUTED,
                 pos=(w - int(14 * s), h - int(16 * s)),
                 align="bottomright",
+            )
+
+    @staticmethod
+    def _draw_hero_status_card(
+        surface: pygame.Surface,
+        game_scene: Any,
+        hero: Any,
+        rect: pygame.Rect,
+    ) -> None:
+        s = game_scene.ui_scale
+        draw_pixel_panel(surface, rect, bg_color=pal.UI_BG_DARK, border_color=pal.GOLD_MID, gold_corners=False)
+
+        # Mini Paladin sprite icon on left
+        ic = game_scene.pixel_gen.get_icon("hero")
+        surface.blit(ic, (rect.left + int(10 * s), rect.centery - ic.get_height() // 2))
+
+        tx = rect.left + int(42 * s)
+        lvl_txt = f"{hero.name} Lv.{hero.level}"
+        draw_text_shadow(
+            surface,
+            game_scene.font_small,
+            lvl_txt,
+            pal.GOLD_SHINE,
+            pos=(tx, rect.top + int(15 * s)),
+            align="midleft",
+        )
+        draw_text_shadow(
+            surface,
+            game_scene.font_small,
+            "[RMB/H: Move]",
+            pal.UI_CYAN,
+            pos=(rect.right - int(10 * s), rect.top + int(15 * s)),
+            align="midright",
+        )
+
+        bar_r = pygame.Rect(tx, rect.bottom - int(19 * s), rect.width - int(52 * s), int(13 * s))
+        if hero.alive:
+            ratio = hero.hp / max(1.0, hero.hp_max)
+            draw_pixel_bar(
+                surface,
+                bar_r,
+                ratio,
+                fill_color=pal.UI_GREEN if ratio > 0.4 else pal.GOLD_MID,
+                label=f"HP {int(hero.hp)}/{int(hero.hp_max)} | XP {int(hero.xp_ratio * 100)}%",
+                font=game_scene.font_small,
+            )
+        else:
+            ratio = 1.0 - (hero.respawn_timer_ms / max(1.0, hero.respawn_max_ms))
+            draw_pixel_bar(
+                surface,
+                bar_r,
+                ratio,
+                fill_color=pal.UI_RED,
+                label=f"Reviving in {hero.respawn_timer_ms / 1000.0:.1f}s",
+                font=game_scene.font_small,
             )
 
     @staticmethod
