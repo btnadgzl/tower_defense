@@ -1,0 +1,4 @@
+# Tower Defense II — Core Dependencies
+# Python 3.10+ compatible
+
+pygame>=2.5.0,<3.0.0
