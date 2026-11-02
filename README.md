@@ -1,63 +1,73 @@
-# Game Trial
+# Tower Defense II — Royal Guard (Tactical Pixel-Art Edition)
 
 ## Overview
-- A simple **Tower Defense** game built with a **modular architecture**.
-- Implements **Event/Observer**, **Strategy**, and **Factory** design patterns.
-- Can be executed as a standalone `.exe` or from the Python source code.
+**Tower Defense II: Royal Guard** is a modular 2D fantasy tower defense game built in **Python** and **Pygame**. Inspired by tactical slot-based defense games like *Kingdom Rush*, it features a custom **Procedural Pixel-Art & Terrain Baking Engine** (`graphics/pixel_gen.py`, `graphics/map_baker.py`) that renders multi-part evolving towers, animated enemy units, curved cobblestone paths, and dynamic UI panels entirely in code without relying on static sprite sheets.
 
-## Features
-- **Event-driven** input and UI management (`core/events.py`).
-- **Targeting strategies** for sophisticated enemy selection (`gameplay/strategy.py`).
-- **Entity Factory** for dynamic object creation (`engine/factory.py`).
-- Efficient bullet management using a simple **Object Pool** (`engine/pool.py`).
-- Modernized and responsive UI elements (`ui/elements.py`).
+> **Note:** The original v1 prototype is preserved in the [`legacy_v1/`](./legacy_v1) directory for historical reference.
+
+---
+
+## Key Features & Architecture
+- **Procedural Pixel-Art Engine (`graphics/`):**
+  - Generates multi-layered sprites on low-resolution virtual canvases with automatic 1px dark contour generation (`apply_pixel_outline`), directional shading, and crisp nearest-neighbor scaling.
+  - Bakes a complete fantasy battleground (`bake_pixel_map`) featuring a Catmull-Rom spline cobblestone road, azure river, stone bridge, forest groves, and the Royal Castle.
+- **Software Design Patterns:**
+  - **Observer / Event Bus (`core/events.py`):** Decouples gameplay events, audio playback, and UI state transitions via `EventManager`.
+  - **Strategy Pattern (`gameplay/strategy.py`):** Per-tower selectable targeting priorities (`First`, `Strongest`, `Weakest`, `Nearest`).
+  - **Object Pool (`gameplay/projectiles.py`):** Reuses `Projectile` instances via `ProjectilePool` to eliminate frame-time garbage collection spikes.
+- **4 Evolving Tower Archetypes (3 Upgrade Tiers Each):**
+  1. **Archer Tower (`[1]`):** High fire rate single-target physical attacks with scaling critical strike chance (`10% -> 28%`).
+  2. **Royal Artillery (`[2]`):** Fires parabolic mortar shells that deal heavy Area of Effect (AoE) explosive splash damage.
+  3. **Frost Spire (`[3]`):** Unleashes an icy nova that deals magic damage and slows enemies within its blast radius.
+  4. **Arcane Obelisk (`[4]`):** Strikes with armor-piercing Chain Lightning that arcs across multiple nearby enemies.
+- **5 Distinct Enemy Classes (`gameplay/enemies.py`):**
+  - *Goblin Scout* (fast, unarmored), *Orc Warrior* (balanced bruiser), *Shadow Warg* (high-speed pack unit), *Dark Knight* (50% physical armor), and *Ancient Stone Golem* (multi-phase Boss unit).
+- **Active Kingdom Spells:**
+  - **`[Q]` Meteor Shower:** Calls down 6 fiery meteors onto leading enemies, dealing heavy AoE explosive damage and applying burn DoT.
+  - **`[W]` Royal Blizzard:** Freezes and slows all enemies across the battlefield while repairing the Royal Castle (`+15 HP`).
+
+---
+
+## Project Structure
+```text
+├── core/               # Event bus, logging, and balance/settings configuration
+├── graphics/           # Procedural pixel-art sprite generator, map baker, and UI kit
+├── gameplay/           # Spline pathing, towers, enemies, pooled projectiles, and waves
+├── systems/            # Pixel particle/shockwave system and audio controller
+├── ui/                 # Tactical radial menu, HUD, and menu/overlay screens
+├── assets/             # Audio tracks (.wav) and pixel font
+├── legacy_v1/          # Archived v1.0 prototype
+├── game.py             # Main game engine and primary loop
+└── settings.json       # Persistent user configuration and high score records
+```
+
+---
 
 ## How to Run
 
-### Via Standalone Executable
-- **PowerShell:**
-  ```powershell
-  & ".\OyunDeneme.exe"
+### Prerequisites
+- Python 3.10+
+- `pygame` (`pip install pygame`)
 
-  Manual Launch: Navigate to the folder and double-click OyunDeneme.exe.
+### Launch Game
+```bash
+python game.py
+# or on Windows PowerShell:
+py game.py
+```
 
-From Source Code
-Python 3.12+ is recommended.
-Packaging (PyInstaller)
-To generate a standalone .exe file:
+---
 
-Build Command:
-pyinstaller --noconfirm --clean --onefile --name OyunDeneme "game.py" --add-data "assets;assets" --add-data "settings.json;."
-Note: Add the --windowed flag to hide the console window upon launch.
-Project Structure
-assets/: Game visuals and audio files.
-core/: Core events, logging, and configuration loader.
-engine/: Rendering, transitions, upgrades, factory, and object pooling.
-gameplay/: Towers, enemies, bullets, and targeting strategies.
-systems/: Input, sound, and scoring systems.
-ui/: HUD, menus, overlays, settings, upgrades, and UIElement base class.
-game.py: Main game engine and the primary game loop.
-settings.json: User-defined configurations.
+## Controls
 
-Settings (settings.json)
-Key,Value Range / Type
-music_volume,0.0–1.0
-sfx_volume,0.0–1.0
-fullscreen,true / false
-show_fps,true / false
-difficulty,easy
-
-Controls
-Space: Manual Fire
-U: Toggle Upgrade Panel
-Q: Use Ultimate Ability
-Esc: Pause / Resume
-1 / 2 / 3: Upgrade Shortcuts (Range / Fire Rate / Bullet)
-Debug Keys: F1-F10, Tab, Ctrl+S
-
-Troubleshooting
-Asset Loading in EXE: The code supports bundled paths using sys._MEIPASS for PyInstaller compatibility.
-Event Errors: Ensure Event and constants are imported at the top of UI modules.
-
-License and Assets
-Asset files should be licensed according to their original terms. Please include appropriate licensing documentation when sharing externally.
+| Input / Key | Action |
+| :--- | :--- |
+| **Left Click** | Select tactical build slots, interact with Radial Menu & HUD buttons |
+| **Right Click / `ESC`** | Close active Radial Menu / Toggle Pause Menu |
+| **`1` / `2` / `3` / `4`** | Build Archer / Artillery / Frost / Arcane tower on selected empty slot |
+| **`U`** | Upgrade selected tower to next tier (Lv.2 / Lv.3) |
+| **`T`** | Cycle selected tower's targeting strategy (`First` / `Strongest` / `Weakest` / `Nearest`) |
+| **`S` / `Backspace`** | Sell selected tower (75% gold refund) |
+| **`N`** | Call next wave early (grants Early Wave Gold Bonus) |
+| **`Space`** | Toggle game speed (`1x` / `2x`) |
+| **`Q` / `W`** | Cast **Meteor Shower** (`Q`) / **Royal Blizzard** (`W`) |
