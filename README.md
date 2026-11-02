@@ -1,7 +1,7 @@
 # Tower Defense II — Royal Guard (Tactical Pixel-Art Edition)
 
 ## Overview
-**Tower Defense II: Royal Guard** is a modular 2D fantasy tower defense game built in **Python** and **Pygame**. Inspired by tactical slot-based defense games like *Kingdom Rush*, it features a custom **Procedural Pixel-Art & Terrain Baking Engine** (`graphics/pixel_gen.py`, `graphics/map_baker.py`) that renders multi-part evolving towers, animated enemy units, curved cobblestone paths, and dynamic UI panels entirely in code without relying on static sprite sheets.
+**Tower Defense II: Royal Guard** is a modular 2D fantasy tower defense game built in **Python** and **Pygame**. Inspired by tactical slot-based defense games like *Kingdom Rush*, it features a custom **Procedural Pixel-Art & Terrain Baking Engine** (`graphics/pixel_gen.py`, `graphics/map_baker.py`) paired with a **Real-Time 2D Dynamic Lighting & Additive Bloom Pipeline** (`graphics/lighting.py`) and a **Living World & Persistent Battlefield Decal System** (`systems/world_fx.py`)—all rendered in code without relying on external static sprite sheets.
 
 > **Note:** The original v1 prototype is preserved in the [`legacy_v1/`](./legacy_v1) directory for historical reference.
 
@@ -11,6 +11,12 @@
 - **Procedural Pixel-Art Engine (`graphics/`):**
   - Generates multi-layered sprites on low-resolution virtual canvases with automatic 1px dark contour generation (`apply_pixel_outline`), directional shading, and crisp nearest-neighbor scaling.
   - Bakes a complete fantasy battleground (`bake_pixel_map`) featuring a Catmull-Rom spline cobblestone road, azure river, stone bridge, forest groves, and the Royal Castle.
+- **Real-Time 2D Dynamic Lighting & Bloom (`graphics/lighting.py`):**
+  - Smooth Day -> Sunset -> Night progression across campaign waves (or manual mode cycling via **`[L]`**).
+  - Multiplicative ambient lightmap (`BLEND_RGB_MULT`) combined with an additive HDR-style bloom pass (`BLEND_RGB_ADD`) for glowing Frost/Arcane spires, castle torches, enemy spawn portal, Boss Golem magma core, projectiles, chain lightning arcs, and falling meteors.
+- **Living World & Persistent Battlefield Decals (`systems/world_fx.py`):**
+  - Persistent fading ground decals: artillery/meteor scorch craters, frost spire ice patches, and combat splats.
+  - Animated river current foam ripples, wind-blown forest canopy leaves, and glowing night fireflies.
 - **Software Design Patterns:**
   - **Observer / Event Bus (`core/events.py`):** Decouples gameplay events, audio playback, and UI state transitions via `EventManager`.
   - **Strategy Pattern (`gameplay/strategy.py`):** Per-tower selectable targeting priorities (`First`, `Strongest`, `Weakest`, `Nearest`).
@@ -31,9 +37,9 @@
 ## Project Structure
 ```text
 ├── core/               # Event bus, logging, and balance/settings configuration
-├── graphics/           # Procedural pixel-art sprite generator, map baker, and UI kit
+├── graphics/           # Procedural pixel-art generator, map baker, 2D lighting/bloom, UI kit
 ├── gameplay/           # Spline pathing, towers, enemies, pooled projectiles, and waves
-├── systems/            # Pixel particle/shockwave system and audio controller
+├── systems/            # Pixel particles, persistent ground decals/ambient FX, and audio
 ├── ui/                 # Tactical radial menu, HUD, and menu/overlay screens
 ├── assets/             # Audio tracks (.wav) and pixel font
 ├── legacy_v1/          # Archived v1.0 prototype
@@ -68,6 +74,7 @@ py game.py
 | **`U`** | Upgrade selected tower to next tier (Lv.2 / Lv.3) |
 | **`T`** | Cycle selected tower's targeting strategy (`First` / `Strongest` / `Weakest` / `Nearest`) |
 | **`S` / `Backspace`** | Sell selected tower (75% gold refund) |
+| **`L`** | Cycle Dynamic 2D Lighting mode (`Auto Cycle` / `Daylight` / `Sunset` / `Night`) |
 | **`N`** | Call next wave early (grants Early Wave Gold Bonus) |
 | **`Space`** | Toggle game speed (`1x` / `2x`) |
 | **`Q` / `W`** | Cast **Meteor Shower** (`Q`) / **Royal Blizzard** (`W`) |
