@@ -135,7 +135,8 @@ class HeroUnit:
         dmg_raw = float(sk["base_damage"]) + (self.level - 1) * float(sk["damage_per_level"])
         game_scene.world_fx.add_holy_sigil((tx, ty), rad)
         game_scene.particles.spawn_build_sparkles((tx, ty), pal.GOLD_SHINE)
-        game_scene.particles.spawn_explosion((tx, ty), rad * 0.85)
+        game_scene.particles.spawn_holy_burst((tx, ty), rad)
+        game_scene.lighting.add_flash(tx, ty, rad * 2.2, (255, 245, 175), duration_ms=360.0)
         game_scene.particles.add_floating_text(
             (tx, ty - 22 * s),
             "HOLY JUDGMENT!",

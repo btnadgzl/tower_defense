@@ -510,6 +510,7 @@ class TowerDefenseGame:
                     dmg = e.take_damage(float(cfg["damage"]), "magic")
                     e.apply_slow(float(cfg["slow_factor"]), float(cfg["slow_duration_ms"]))
                     self.particles.spawn_frost_nova(e.pos, 38.0 * self.ui_scale)
+                    self.lighting.add_flash(e.pos[0], e.pos[1], 80.0 * self.ui_scale, (140, 235, 255), duration_ms=220.0)
                     self.world_fx.add_frost_patch(e.pos, 42.0 * self.ui_scale)
                     self.on_enemy_damaged(e, dmg, is_crit=False, color=pal.FROST_LIGHT)
             self.trigger_shake(4.0, 260.0)
@@ -561,7 +562,8 @@ class TowerDefenseGame:
                 self.enemies.remove(e)
                 self.castle_hp = max(0.0, self.castle_hp - e.castle_damage)
                 self.trigger_shake(6.5, 320.0)
-                self.particles.spawn_explosion(self.road.castle_pos, 48.0 * self.ui_scale)
+                self.particles.spawn_explosion(self.road.castle_pos, 54.0 * self.ui_scale)
+                self.lighting.add_flash(self.road.castle_pos[0], self.road.castle_pos[1], 130.0 * self.ui_scale, (255, 120, 60), duration_ms=340.0)
                 self.particles.add_floating_text(
                     self.road.castle_pos,
                     f"-{e.castle_damage} Castle HP!",
@@ -644,6 +646,7 @@ class TowerDefenseGame:
                 tx, ty = m["tx"], m["ty"]
                 rad = m["radius"]
                 self.particles.spawn_explosion((tx, ty), rad)
+                self.lighting.add_flash(tx, ty, rad * 2.2, (255, 200, 90), duration_ms=340.0)
                 self.world_fx.add_scorch_crater((tx, ty), rad)
                 self.trigger_shake(5.5, 250.0)
                 for e in list(self.enemies):
@@ -690,6 +693,7 @@ class TowerDefenseGame:
         px, py = proj.x, proj.y
         if proj.kind == "bomb":
             self.particles.spawn_explosion((px, py), proj.splash_radius)
+            self.lighting.add_flash(px, py, proj.splash_radius * 2.0, (255, 220, 110), duration_ms=280.0)
             self.world_fx.add_scorch_crater((px, py), proj.splash_radius)
             self.trigger_shake(3.2, 160.0)
             r2 = proj.splash_radius ** 2
@@ -699,6 +703,7 @@ class TowerDefenseGame:
                     self.on_enemy_damaged(e, dmg, is_crit=False, color=pal.FIRE_LIGHT)
         elif proj.kind == "frost":
             self.particles.spawn_frost_nova((px, py), proj.splash_radius)
+            self.lighting.add_flash(px, py, proj.splash_radius * 1.8, (140, 235, 255), duration_ms=250.0)
             self.world_fx.add_frost_patch((px, py), proj.splash_radius)
             r2 = max(24.0, proj.splash_radius) ** 2
             for e in list(self.enemies):
