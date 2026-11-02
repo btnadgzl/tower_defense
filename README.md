@@ -24,6 +24,11 @@
 - **Real-Time 2D Dynamic Lighting & Bloom (`graphics/lighting.py`):**
   - Smooth Day -> Sunset -> Night progression across campaign waves (or manual mode cycling via **`[L]`**).
   - Multiplicative ambient lightmap (`BLEND_RGB_MULT`) combined with an additive HDR-style bloom pass (`BLEND_RGB_ADD`) for glowing Frost/Arcane spires, hero holy aura, castle torches, enemy spawn portal, Boss Golem magma core, molten lava river, projectiles, and falling meteors.
+- **Multi-Stage Procedural Explosion FX (`systems/particles.py`, `graphics/lighting.py`):**
+  - **Dynamic Multi-Lobe Fireball:** Starts with a white-hot core and fiery orange lobes outlined with crisp 1px pixel contours, rapidly expanding during the initial detonation.
+  - **Billowing Smoke & Buoyancy:** Fireballs organically cool into billowing charcoal smoke clouds with glowing internal embers, floating upward and dispersing.
+  - **Dual Concussion Shockwaves & Flying Shrapnel:** Fast vapor concussion ring paired with an intense fire wave, arcing glowing spark embers, solid tumbling rock shrapnel, and negative-gravity rising smoke.
+  - **Detonation Light & Bloom Flash:** Explosions, meteor impacts, and the Paladin's Holy Judgment immediately trigger instant dynamic point light flashes in the 2D lighting engine that bathe the surrounding scenery in vivid bloom.
 - **Living World & Persistent Battlefield Decals (`systems/world_fx.py`):**
   - Persistent fading ground decals: artillery/meteor scorch craters, frost spire ice patches, holy judgment sigils, and combat splats.
   - Animated river/lava current foam ripples, wind-blown biome foliage/embers, and glowing night fireflies.
