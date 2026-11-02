@@ -39,6 +39,61 @@ DIFFICULTY_PROFILES: Dict[str, Dict[str, Any]] = {
     },
 }
 
+# --- Biome / Map Definitions ---
+BIOME_DEFINITIONS: Dict[str, Dict[str, Any]] = {
+    "grasslands": {
+        "key": "grasslands",
+        "name": "Emerald Grasslands",
+        "short_name": "Grasslands",
+        "desc": "Lush royal meadows crossed by an azure river and oak groves.",
+        "accent_color": (90, 195, 95),
+    },
+    "frost_tundra": {
+        "key": "frost_tundra",
+        "name": "Frozen Tundra",
+        "short_name": "Tundra",
+        "desc": "Snow-covered northern pass with a glacial river and frost pines.",
+        "accent_color": (85, 200, 245),
+    },
+    "volcanic_ash": {
+        "key": "volcanic_ash",
+        "name": "Volcanic Ashlands",
+        "short_name": "Ashlands",
+        "desc": "Scorched obsidian wastes split by a glowing molten lava river.",
+        "accent_color": (255, 115, 45),
+    },
+}
+
+# --- Controllable Hero Unit (Royal Paladin) ---
+HERO_CONFIG: Dict[str, Any] = {
+    "name": "Sir Roland",
+    "title": "Royal Paladin",
+    "max_level": 5,
+    "base_hp": 260.0,
+    "hp_per_level": 75.0,
+    "hp_regen_per_sec": 12.0,
+    "move_speed": 145.0,
+    "aggro_radius": 115.0,
+    "attack_range": 42.0,
+    "cleave_radius": 52.0,
+    "attack_cooldown_ms": 720.0,
+    "base_damage": 26.0,
+    "damage_per_level": 11.0,
+    "respawn_time_ms": 10000.0,
+    "xp_thresholds": [0, 80, 200, 380, 620],
+    "skill": {
+        "key": "E",
+        "name": "Holy Judgment",
+        "cooldown_ms": 14000.0,
+        "base_damage": 85.0,
+        "damage_per_level": 28.0,
+        "radius": 110.0,
+        "slow_factor": 0.65,
+        "slow_duration_ms": 3000.0,
+        "self_heal": 65.0,
+    },
+}
+
 # --- Tower Definitions (4 Fantasy Archetypes x 3 Upgrade Tiers) ---
 TOWER_DEFINITIONS: Dict[str, Dict[str, Any]] = {
     "archer": {
@@ -281,11 +336,14 @@ DEFAULTS: Dict[str, Any] = {
     "fullscreen": False,
     "show_fps": True,
     "difficulty": "normal",
+    "biome": "grasslands",
     "high_score": 0,
     "best_wave": 1,
     "controls": {
         "spell_meteor": 113,   # K_q
         "spell_blizzard": 119, # K_w
+        "hero_skill": 101,     # K_e
+        "hero_move": 104,      # K_h
         "speed_toggle": 32,    # K_SPACE
         "pause": 27,           # K_ESCAPE
     },
@@ -315,6 +373,10 @@ def load_settings(base_dir: str) -> Dict[str, Any]:
     if diff not in DIFFICULTY_PROFILES:
         diff = "normal"
     cfg["difficulty"] = diff
+    biome = str(cfg.get("biome", DEFAULTS["biome"])).lower()
+    if biome not in BIOME_DEFINITIONS:
+        biome = "grasslands"
+    cfg["biome"] = biome
     cfg["high_score"] = int(cfg.get("high_score", 0))
     cfg["best_wave"] = int(cfg.get("best_wave", 1))
     if not isinstance(cfg.get("controls"), dict):

@@ -23,12 +23,14 @@ EVENT_ENEMY_KILLED = "EnemyKilled"
 EVENT_ENEMY_HIT = "EnemyHit"
 EVENT_ENEMY_REACHED_CASTLE = "EnemyReachedCastle"
 
-# --- Tower & Ability Events ---
+# --- Tower, Hero & Ability Events ---
 EVENT_TOWER_BUILT = "TowerBuilt"
 EVENT_TOWER_UPGRADED = "TowerUpgraded"
 EVENT_TOWER_SOLD = "TowerSold"
 EVENT_TOWER_FIRE = "TowerFire"
 EVENT_SPELL_CAST = "SpellCast"
+EVENT_HERO_LEVEL_UP = "HeroLevelUp"
+EVENT_HERO_SKILL = "HeroSkill"
 
 # --- Economy & Status Events ---
 EVENT_COINS_UPDATED = "CoinsUpdated"
@@ -62,4 +64,3 @@ class EventManager:
     def post(self, event: Event) -> None:
         for listener in list(self.listeners):
             listener.notify(event)
-
