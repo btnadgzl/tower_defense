@@ -1,11 +1,12 @@
 {
-  "music_volume": 0.9735294117647059,
-  "sfx_volume": 0.9411764705882353,
+  "music_volume": 0.5,
+  "sfx_volume": 0.7,
   "fullscreen": false,
   "show_fps": true,
   "difficulty": "normal",
-  "high_score": 6218,
-  "best_wave": 6,
+  "biome": "grasslands",
+  "high_score": 0,
+  "best_wave": 1,
   "controls": {
     "shoot": 32,
     "special1": 113,
