@@ -308,3 +308,4 @@ class HeroUnit:
                     game_scene.on_enemy_damaged(e, c_dmg, is_crit=False, color=pal.GOLD_LIGHT)
 
         self.gain_xp(5, game_scene)
+
