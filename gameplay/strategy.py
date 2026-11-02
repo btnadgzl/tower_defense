@@ -1,28 +1,65 @@
 from __future__ import annotations
-import math
-from typing import Protocol, Dict, List, Any, Optional
+from typing import Protocol, List, Any, Optional
 
 
 class TargetingStrategy(Protocol):
-    def select_target(self, engine: Any, tower: Dict[str, Any], enemies: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]: ...
+    name: str
+    short_label: str
+
+    def select_target(self, tower: Any, candidates: List[Any]) -> Optional[Any]: ...
+
+
+class FirstOnPath:
+    """Targets the enemy furthest along the road (closest to the Royal Castle)."""
+    name = "first"
+    short_label = "First"
+
+    def select_target(self, tower: Any, candidates: List[Any]) -> Optional[Any]:
+        if not candidates:
+            return None
+        return max(candidates, key=lambda e: e.dist_traveled)
+
+
+class StrongestTarget:
+    """Targets the enemy with the highest current HP."""
+    name = "strongest"
+    short_label = "Strongest"
+
+    def select_target(self, tower: Any, candidates: List[Any]) -> Optional[Any]:
+        if not candidates:
+            return None
+        return max(candidates, key=lambda e: (e.hp, e.dist_traveled))
+
+
+class WeakestTarget:
+    """Targets the enemy with the lowest current HP."""
+    name = "weakest"
+    short_label = "Weakest"
+
+    def select_target(self, tower: Any, candidates: List[Any]) -> Optional[Any]:
+        if not candidates:
+            return None
+        return min(candidates, key=lambda e: (e.hp, -e.dist_traveled))
 
 
 class NearestTarget:
-    def select_target(self, engine: Any, tower: Dict[str, Any], enemies: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-        if not enemies:
+    """Targets the enemy physically closest to the tower."""
+    name = "nearest"
+    short_label = "Nearest"
+
+    def select_target(self, tower: Any, candidates: List[Any]) -> Optional[Any]:
+        if not candidates:
             return None
-        tx, ty = tower['pos']
-        best = None
-        best_d = float('inf')
-        for e in enemies:
-            dx = e['pos'][0] - tx; dy = e['pos'][1] - ty
-            d2 = dx*dx + dy*dy
-            if d2 < best_d:
-                best_d = d2; best = e
-        return best
+        tx, ty = tower.pos
+        return min(
+            candidates,
+            key=lambda e: (e.x - tx) ** 2 + (e.y - ty) ** 2,
+        )
 
 
-class FirstInList:
-    def select_target(self, engine: Any, tower: Dict[str, Any], enemies: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-        return enemies[0] if enemies else None
-
+STRATEGIES = [
+    FirstOnPath(),
+    StrongestTarget(),
+    WeakestTarget(),
+    NearestTarget(),
+]
