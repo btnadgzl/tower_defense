@@ -1,6 +1,6 @@
 from __future__ import annotations
 import math
-from typing import Dict, Tuple, Any
+from typing import Dict, Tuple, Any, List
 import pygame
 
 
@@ -17,7 +17,7 @@ def _lerp_color(c1: Color, c2: Color, t: float) -> Color:
 
 
 class LightingEngine:
-    """Real-time 2D dynamic lighting, day/night cycle, and additive bloom pipeline."""
+    """Real-time 2D dynamic lighting, day/night cycle, flash bursts, and additive bloom pipeline."""
 
     MODES = ["auto", "day", "dusk", "night"]
     MODE_LABELS = {
@@ -41,6 +41,7 @@ class LightingEngine:
         self.lightmap = pygame.Surface((self.lw, self.lh))
         self.bloom_map = pygame.Surface((self.lw, self.lh))
         self._brush_cache: Dict[Tuple[int, Color], pygame.Surface] = {}
+        self.flashes: List[Dict[str, Any]] = []
 
         self.mode_index: int = 0
         self.time_sec: float = 0.0
@@ -59,6 +60,24 @@ class LightingEngine:
         self.mode_index = (self.mode_index + 1) % len(self.MODES)
         return self.mode
 
+    def add_flash(
+        self,
+        x: float,
+        y: float,
+        radius: float,
+        color: Color = (255, 235, 175),
+        duration_ms: float = 240.0,
+    ) -> None:
+        """Triggers an intense, sudden explosion flash burst that bathes the scene in bloom."""
+        self.flashes.append({
+            "x": float(x),
+            "y": float(y),
+            "radius": float(radius),
+            "color": color,
+            "ttl": float(duration_ms),
+            "max_ttl": float(duration_ms),
+        })
+
     def resize(self, width: int, height: int) -> None:
         self.width = width
         self.height = height
@@ -67,6 +86,7 @@ class LightingEngine:
         self.lightmap = pygame.Surface((self.lw, self.lh))
         self.bloom_map = pygame.Surface((self.lw, self.lh))
         self._brush_cache.clear()
+        self.flashes.clear()
 
     def _get_brush(self, radius_lowres: int, color: Color) -> pygame.Surface:
         r = max(4, min(160, int(radius_lowres)))
@@ -100,6 +120,11 @@ class LightingEngine:
         self.time_sec += dt_ms / 1000.0
         target_ambient = self.AMBIENT_DAY
         target_dark = 0.0
+
+        for fl in list(self.flashes):
+            fl["ttl"] -= dt_ms
+            if fl["ttl"] <= 0:
+                self.flashes.remove(fl)
 
         m = self.mode
         if m == "day":
@@ -265,11 +290,19 @@ class LightingEngine:
                 my_p = m["y"] + (m["ty"] - m["y"]) * p
                 add_light(mx_p, my_p, 135.0 * s, (255, 145, 50), bloom_intensity=0.65)
 
-        for sw in game_scene.particles.shockwaves:
-            p = sw["ttl"] / max(1.0, sw["max_ttl"])
-            add_light(sw["x"], sw["y"], sw["max_r"] * 1.4 * p, sw["color"], bloom_intensity=0.55 * p)
+        # 7. Sudden Detonation Flash Bursts (Explosions / Meteors / Castle Breach)
+        for fl in self.flashes:
+            p = max(0.0, fl["ttl"] / max(1.0, fl["max_ttl"]))
+            intensity = p ** 1.6
+            add_light(
+                fl["x"],
+                fl["y"],
+                fl["radius"] * (0.85 + 0.35 * (1.0 - p)) * s,
+                fl["color"],
+                bloom_intensity=0.88 * intensity,
+            )
 
-        # 7. Ambient Fireflies (from WorldEffectsSystem)
+        # 8. Ambient Fireflies (from WorldEffectsSystem)
         if world_fx is not None:
             for ff in world_fx.fireflies:
                 glow = 0.5 + 0.5 * math.sin(ff["phase"])
